@@ -8,5 +8,5 @@ The baker component of the BridgeBuilder system takes as input the old and new r
 
 
 [1]: https://en.wikipedia.org/wiki/Benjamin_Baker_(engineer)   "Sir Benjamin Baker KCB KCMG FRS FRSE"
-[2]: https://en.wikipedia.org/wiki/Forth_Railway_Bridge	       "Forth Bridge"
+[2]: https://en.wikipedia.org/wiki/Forth_Railway_Bridge        "Forth Bridge"
 

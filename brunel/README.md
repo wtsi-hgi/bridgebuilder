@@ -11,4 +11,4 @@ The brunel component of the BridgeBuilder system takes as input a sorted BAM in 
 
 [1]: https://en.wikipedia.org/wiki/Isambard_Kingdom_Brunel     "Isambard Kingdom Brunel"
 [2]: https://en.wikipedia.org/wiki/Clifton_Suspension_Bridge   "Clifton Suspension Bridge"
-[3]: http://genomewiki.ucsc.edu/index.php/Chains_Nets	       "Chains and Nets"
+[3]: http://genomewiki.ucsc.edu/index.php/Chains_Nets          "Chains and Nets"

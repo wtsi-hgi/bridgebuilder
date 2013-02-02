@@ -10,6 +10,6 @@ The binnie component of the BridgeBuilder system takes as input the original BAM
 
 
 
-[1]: https://en.wikipedia.org/wiki/Alexander_Binnie	 "Sir Alexander Richardson Binnie"
-[2]: https://en.wikipedia.org/wiki/Vauxhall_Bridge	 "Vauxhall Bridge"
+[1]: https://en.wikipedia.org/wiki/Alexander_Binnie      "Sir Alexander Richardson Binnie"
+[2]: https://en.wikipedia.org/wiki/Vauxhall_Bridge       "Vauxhall Bridge"
 
