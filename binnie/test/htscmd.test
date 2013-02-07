@@ -1,0 +1,17 @@
+#!/bin/sh
+
+# Call in test/vars (e.g. for HTSCMD)
+TEST_DIR=`dirname $0`
+. ${TEST_DIR}/vars
+
+
+# Number of tests
+echo 1..1
+n=1
+
+
+# Test htscmd functionality
+test="htscmd convert SAM -> BAM -> SAM"
+(${HTSCMD} samview -Sb in.sam | ${HTSCMD} samview - | ${DIFF} - in.sam) && echo "ok ${n} - ${test}" || echo "not ok ${n} - ${test}"
+
+

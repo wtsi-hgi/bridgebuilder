@@ -1,0 +1,4 @@
+# Will be filled out by autoconf
+HTSCMD=@HTSCMD@
+DIFF=@DIFF@
+
