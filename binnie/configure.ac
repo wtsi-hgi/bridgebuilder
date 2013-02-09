@@ -1,6 +1,6 @@
 # Process this file with autoconf to produce a configure script.
 AC_INIT([binnie], [0.1], [jr17@sanger.ac.uk])
-AC_PREREQ([2.60])
+AC_PREREQ([2.69])
 
 # Check to make sure that the src dir actually exists (sanity check)
 AC_CONFIG_SRCDIR([src/binnie.c])
@@ -8,6 +8,7 @@ AC_CONFIG_SRCDIR([src/binnie.c])
 # Configure aux dirs
 AC_CONFIG_AUX_DIR([build-aux])
 AC_CONFIG_MACRO_DIR([m4])
+AC_CONFIG_MACRO_DIRS([m4 gl/m4])
 
 # Enable extensions to C or Posix (which gnulib will provide on other systems -- this must be called before compiler is run)
 AC_USE_SYSTEM_EXTENSIONS
@@ -18,7 +19,7 @@ LT_PREREQ([2.4.2])
 
 # Initialize automake
 AC_PROG_MAKE_SET
-AM_INIT_AUTOMAKE([foreign -Wall -Werror dist-bzip2])
+AM_INIT_AUTOMAKE([foreign 1.13 -Wall -Werror dist-bzip2])
 #AM_GNU_GETTEXT_VERSION([0.18.2])
 
 # Check for C compiler
@@ -60,9 +61,6 @@ AC_ARG_VAR([ZLIB_LIBS],[linker flags for ZLIB])
 AC_MSG_CHECKING([for zlib])
 AC_CHECK_LIB([z], [zlibVersion], [], [AC_MSG_FAILURE([zlib is required but check for zlibVersion function failed! (is ZLIB_LIBS set correctly?)])], [${ZLIB_LIBS}])
 
-
-# Check for typedefs, structures, and compiler characteristics
-AC_CHECK_HEADER_STDBOOL
 
 # Setup GetText for internationalisation
 #AM_GNU_GETTEXT([external])
