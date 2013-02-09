@@ -52,8 +52,8 @@ gl_INIT
 # Check for htslib
 AC_ARG_VAR([HTSLIB_CFLAGS],[C compiler flags for HTSLIB])
 AC_ARG_VAR([HTSLIB_LIBS],[linker flags for HTSLIB])
-#AC_MSG_CHECKING([for htslib])
-#AC_CHECK_LIB([hts], [hts_open], [], [AC_MSG_FAILURE([htslib is required but check for hts_open function failed! (is HTSLIB_LIBS set correctly?)])], [${HTSLIB_LIBS}])
+AC_MSG_CHECKING([for htslib])
+AC_CHECK_LIB([hts], [hts_open], [], [AC_MSG_FAILURE([htslib is required but check for hts_open function failed! (is HTSLIB_LIBS set correctly?)])], [${HTSLIB_LIBS}])
 
 # Checks for zlib and adds -lz to LIBS and defined HAVE_LIBZ
 AC_ARG_VAR([ZLIB_CFLAGS],[C compiler flags for ZLIB])
