@@ -46,20 +46,20 @@ AC_SUBST(VERSION)
 # Bring in config headers
 AC_CONFIG_HEADERS([config.h])
 
-# Initialise and check gnulib (note: gl_EARLY must also be called before this and immediately after AC_PROG_CC)
+# Initialise and check gnulib modules (note: gl_EARLY must also be called before this and immediately after AC_PROG_CC)
 gl_INIT
-
-# Check for htslib
-AC_ARG_VAR([HTSLIB_CFLAGS],[C compiler flags for HTSLIB])
-AC_ARG_VAR([HTSLIB_LIBS],[linker flags for HTSLIB])
-AC_MSG_CHECKING([for htslib])
-AC_CHECK_LIB([hts], [hts_open], [], [AC_MSG_FAILURE([htslib is required but check for hts_open function failed! (is HTSLIB_LIBS set correctly?)])], [${HTSLIB_LIBS}])
 
 # Checks for zlib and adds -lz to LIBS and defined HAVE_LIBZ
 AC_ARG_VAR([ZLIB_CFLAGS],[C compiler flags for ZLIB])
-AC_ARG_VAR([ZLIB_LIBS],[linker flags for ZLIB])
+AC_ARG_VAR([ZLIB_LDFLAGS],[linker flags for ZLIB])
 AC_MSG_CHECKING([for zlib])
-AC_CHECK_LIB([z], [zlibVersion], [], [AC_MSG_FAILURE([zlib is required but check for zlibVersion function failed! (is ZLIB_LIBS set correctly?)])], [${ZLIB_LIBS}])
+AC_CHECK_LIB([z], [zlibVersion], [], [AC_MSG_FAILURE([zlib is required but check for zlibVersion function failed! (is ZLIB_LDFLAGS set correctly?)])], [${ZLIB_LDFLAGS}])
+
+# Check for htslib (which requires zlib)
+AC_ARG_VAR([HTSLIB_CFLAGS],[C compiler flags for HTSLIB])
+AC_ARG_VAR([HTSLIB_LDFLAGS],[linker flags for HTSLIB])
+AC_MSG_CHECKING([for htslib])
+AC_CHECK_LIB([hts], [hts_open], [], [AC_MSG_FAILURE([htslib is required but check for hts_open function failed! (is HTSLIB_LDFLAGS set correctly?)])], [${LIBS} ${HTSLIB_LDFLAGS} ${ZLIB_LDFLAGS} ${LTLIBMULTITHREAD}])
 
 
 # Setup GetText for internationalisation
