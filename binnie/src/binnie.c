@@ -49,7 +49,7 @@ int* trans;
 
 char* usage() 
 {
-  return gettext("Usage: binnie <input.bam> <newheader.sam> <translation_table.txt> <output.bam>\n");
+  return gettext("Usage: binnie [options] <original(bam|sam)> <bridge-mapped(bam|sam)>");
 }
 
 int main(int argc, char** argv) 
