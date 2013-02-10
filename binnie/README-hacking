@@ -1,3 +1,8 @@
-# Checkout from git and run bootstrap: 
-./bootstrap
+On initial checkout from git, checkout gnulib from git and run bootstrap (which calls autoreconf) by running: ./autogen.sh
+
+Once gnulib is in place, you can safely call ./autogen.sh again to autoreconf (if changes are made to .ac, .am, or .in files).
+
+To add gnulib modules, add them to bootstrap.conf and then run ./bootstrap again (or remove the gnulib directory and run ./autogen.sh)
+
+When coding C files, use the GNU Coding Standards: https://www.gnu.org/prep/standards/standards.html
 
