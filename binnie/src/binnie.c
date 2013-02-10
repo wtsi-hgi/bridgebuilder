@@ -20,11 +20,13 @@
  *
  */
 
-#include <errno.h>
-#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h> 
+#include <stdint.h>
+#include <errno.h>
+#include <error.h>
+#include <getopt.h>
 
 #include "config.h"
 
@@ -32,6 +34,9 @@
 #include <locale.h> 
 
 #include <htslib/sam.h>
+
+static int verbosity;
+static int debug_flag;
 
 char* file_name;
 char* replace_name;
@@ -50,7 +55,7 @@ int* trans;
 
 char* usage() 
 {
-  return gettext("Usage: binnie [options] <original(bam|sam)> <original_bridge(bam|sam)>");
+  return gettext("Usage: binnie [options] <original(bam|sam)> <bridge(bam|sam)>");
 }
 
 /* 
@@ -59,28 +64,28 @@ char* usage()
  * 
  * 1. Individual Reads processed into a buffer containing the read data and a result bin: 
  * --------------------------------------
- * Original	Orig_Bridge	Bin
+ * Original  Bridge    Bin
  * --------------------------------------
- * Unmapped	Unmapped	Original
- * Unmapped	MQ >= 0		Bridge
- * MQ == 0	Unmapped	Original
- * MQ == 0	MQ == 0		Original*
- * MQ == 0	MQ > 0		Remap
- * MQ > 0	Unmapped	Original
- * MQ > 0	MQ == 0		Remap
- * MQ > 0	MQ > 0		Remap
- * Deleted	(any)		Remap
+ * Unmapped  Unmapped  Unchanged
+ * Unmapped  MQ >= 0   Bridged
+ * MQ == 0   Unmapped  Unchanged
+ * MQ == 0   MQ == 0   Unchanged*
+ * MQ == 0   MQ > 0    Remap
+ * MQ > 0    Unmapped  Unchanged
+ * MQ > 0    MQ == 0   Remap
+ * MQ > 0    MQ > 0    Remap
+ * Deleted   (any)     Remap
  * --------------------------------------
  *
  * 2. Check if the read's pair is already in the buffer -- if it is, then update the 
  * other read to note that it's pair is here and change the result bin for both reads: 
  * ------------------------------------------
- * Result_1	Result_2	Bin_1	Bin_2
+ * Result_1   Result_2   Bin_1  Bin_2
  * ------------------------------------------
- * Remap	(any)		Remap	Remap
- * (any)	Remap		Remap	Remap
- * Original	Bridge		Remap	Remap
- * Bridge	Original	Remap	Remap
+ * Remap      (any)      Remap  Remap
+ * (any)      Remap      Remap  Remap
+ * Unchanged  Bridged    Remap  Remap
+ * Bridged    Unchanged  Remap  Remap
  * ------------------------------------------
  *
  * 3. When the buffer is full, start writing to output bins, but first perform one final check: 
@@ -90,13 +95,64 @@ char* usage()
 
 int main(int argc, char** argv) 
 {
+  int c;
+  
+  /* init globals */
+  verbosity = 0;
+  debug_flag = 0;
+  
+  /* setup gettext */
   setlocale (LC_ALL, "");
   bindtextdomain (PACKAGE, LOCALEDIR);
   textdomain (PACKAGE);
+  
+  while (1)
+    {
+      static struct option long_options[] =
+	{
+	  {"verbose",		optional_argument,	0,	'v'},
+	  {"debug",		no_argument,		0,	'd'},
+	  {"unchanged_out",	required_argument,	0,	'u'},
+	  {"bridged_out",	required_argument,	0,	'b'},
+	  {"remap_out",		required_argument,	0,	'r'},
+	  {0, 0, 0, 0}
+	};
+      int option_index = 0;
+      
+      c = getopt_long(argc, argv, "vdu:b:r:", long_options, &option_index);
 
-  if (argc < 5) {
+      if (c < 0)
+	break;
+      
+      switch (c)
+	{
+	case 'v': 
+	  break;
+	case 'd':
+	  break;
+	case 'u':
+	  unchanged_out_file = optarg;
+	  break;
+	case 'b':
+	  bridged_out_file = optarg;
+	  break;
+	case 'r':
+	  remap_out_file = optarg;
+	  break;
+	case '?':
+	  /* getopt_long will have already printed an error */
+	  break;
+	default:
+	  abort ();
+	}
+    }
+
+  if (optind + 2 != argc) {
     perror(usage());
     return -1;
+  } else {
+    original_in_file = argv[optind++];
+    bridge_in_file = argv[optind++];
   }
   
   file_name = argv[1];
