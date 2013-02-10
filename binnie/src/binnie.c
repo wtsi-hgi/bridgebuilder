@@ -47,10 +47,46 @@ bam_hdr_t* replace_header;
 
 int* trans;
 
+
 char* usage() 
 {
-  return gettext("Usage: binnie [options] <original(bam|sam)> <bridge-mapped(bam|sam)>");
+  return gettext("Usage: binnie [options] <original(bam|sam)> <original_bridge(bam|sam)>");
 }
+
+/* 
+ * binnie procedure
+ * ----------------
+ * 
+ * 1. Individual Reads processed into a buffer containing the read data and a result bin: 
+ * --------------------------------------
+ * Original	Orig_Bridge	Bin
+ * --------------------------------------
+ * Unmapped	Unmapped	Original
+ * Unmapped	MQ >= 0		Bridge
+ * MQ == 0	Unmapped	Original
+ * MQ == 0	MQ == 0		Original*
+ * MQ == 0	MQ > 0		Remap
+ * MQ > 0	Unmapped	Original
+ * MQ > 0	MQ == 0		Remap
+ * MQ > 0	MQ > 0		Remap
+ * Deleted	(any)		Remap
+ * --------------------------------------
+ *
+ * 2. Check if the read's pair is already in the buffer -- if it is, then update the 
+ * other read to note that it's pair is here and change the result bin for both reads: 
+ * ------------------------------------------
+ * Result_1	Result_2	Bin_1	Bin_2
+ * ------------------------------------------
+ * Remap	(any)		Remap	Remap
+ * (any)	Remap		Remap	Remap
+ * Original	Bridge		Remap	Remap
+ * Bridge	Original	Remap	Remap
+ * ------------------------------------------
+ *
+ * 3. When the buffer is full, start writing to output bins, but first perform one final check: 
+ * if a read's pair has not been added to buffer, then change its bin to Remap.
+ *
+ */
 
 int main(int argc, char** argv) 
 {
