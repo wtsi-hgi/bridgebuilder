@@ -83,7 +83,7 @@ AC_ARG_VAR([HTSCMD],[absolute path to htscmd binary (from HTSLIB), used in testi
 AC_PATH_PROG([HTSCMD], [htscmd])
 if test -z "$HTSCMD"
 then
-	AC_MSG_WARN([htscmd not found, make check will fail])
+	AC_MSG_WARN([htscmd not found, make check will fail (is htscmd in your PATH?)])
 fi
 
 AC_ARG_VAR([DIFF],[absolute path to diff binary, used in testing])
