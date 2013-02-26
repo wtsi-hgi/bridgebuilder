@@ -19,6 +19,7 @@ Makefile
 /*/config.log
 /*/config.status
 /*/gnulib/
+/*/gl/
 /*/libtool
 /*/stamp-h1
 
