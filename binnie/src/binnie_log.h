@@ -19,16 +19,27 @@
  * this program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-#ifndef BINNIE_FILES_H
-#define BINNIE_FILES_H
+#ifndef BINNIE_LOG_H
+#define BINNIE_LOG_H
+
+#include <stdbool.h>
+
 
 /* verbosity level (0-3; increasing with each -v option): 0 is silent, 3 is maximum verbosity */
 unsigned int verbosity;
 
-/* debug flag: if non-zero, print debugging messages to stderr */
-unsigned int debug_flag;
 
 void blog(unsigned int level, const char *msgfmt, ...);
-void debug(const char *msgfmt, ...);
+
+
+#ifdef DEBUG
+/* debug flag: if true, print debugging messages to stderr */
+bool debug_flag;
+void DLOG(const char *msgfmt, ...);
+#else
+/* (void)sizeof will slurp up variadic functions and don't get evaluated at run-time */
+#define DLOG (void)sizeof
+#endif
+
 
 #endif

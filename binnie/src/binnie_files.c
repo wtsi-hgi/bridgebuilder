@@ -52,7 +52,7 @@ samFile *binnie_open_out(const char *filename)
   samFile *fp;
   int filename_len;
 
-  blog(9, "binnie_open_out: filename=[%s]", filename);
+  DLOG("binnie_open_out: filename=[%s]", filename);
 
   if(!filename) 
     {
@@ -88,7 +88,7 @@ samFile *binnie_open_out(const char *filename)
 
   blog(3, "binnie_open_out: opened fp->fn=[%s]", fp->fn);
 
-  blog(9, "binnie_open_out: returning fp=[%u] for filename=[%s]", fp, filename);
+  DLOG("binnie_open_out: returning fp=[%u] for filename=[%s]", fp, filename);
   return fp;
 }
 
@@ -106,7 +106,7 @@ samFile* binnie_open_in(const char *filename)
   samFile *fp;
   int filename_len;
 
-  blog(9, "binnie_open_in: filename=[%s]", filename);
+  DLOG("binnie_open_in: filename=[%s]", filename);
   
   if(!filename) 
     {
@@ -142,7 +142,7 @@ samFile* binnie_open_in(const char *filename)
   
   blog(3, "binnie_open_in: opened fp->fn=[%s]", fp->fn);
 
-  blog(9, "binnie_open_in: returning fp=[%p] for filename=[%s]", fp, filename);
+  DLOG("binnie_open_in: returning fp=[%p] for filename=[%s]", fp, filename);
   return fp;
 }
 
@@ -155,7 +155,7 @@ samFile* binnie_open_in(const char *filename)
  */
 void binnie_close(samFile *fp)
 {
-  blog(9, "binnie_close: fp=[%p]", fp);
+  DLOG("binnie_close: fp=[%p]", fp);
   sam_close(fp);
-  blog(9, "binnie_close: returning");
+  DLOG("binnie_close: returning");
 }

@@ -27,6 +27,7 @@
 #include <getopt.h>
 #include <locale.h>
 #include <stdint.h>
+#include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 #include <strings.h>
@@ -36,13 +37,20 @@
 #include "progname.h"
 #include "xalloc.h"
 
+/* internationalisation */
 #include "gettext.h"
 
 /* binnie includes */
+#include "binnie.h"
 #include "binnie_log.h"
 #include "binnie_files.h"
+#include "binnie_process.h"
 
-#include <htslib/sam.h>
+/* max size of output buffer (in number of reads or 0 for unlimited) */
+unsigned int buffer_size;
+
+/* max size of output buffer (in number of mapped bases or 0 for unlimited) */
+unsigned int max_buffer_bases;
 
 /* filename of input (BAM/SAM) consisting of original reads */
  char *original_in_file;
@@ -85,50 +93,30 @@ void print_help()
 {
   print_usage();
   fprintf(stderr, gettext("Options: \n"));
-  fprintf(stderr, gettext("  -u, --unchanged_out    Filename of output bin (.bam/.sam) for original reads which did not map to bridge\n"));
-  fprintf(stderr, gettext("  -b, --bridged_out      Filename of output bin (.bam/.sam) for reads that have been newly mapped to bridge\n"));
-  fprintf(stderr, gettext("  -r, --remap-out        Filaname of output bin (.bam/.sam) for reads that need remapping against the full reference\n"));
-  fprintf(stderr, gettext("  -h, --help             Print short help message and exit\n"));
-  fprintf(stderr, gettext("  -v, --verbose[=level]  Increase/Set level of verbosity (-vvv sets level 3 as does --verbose=3)\n"));
-  fprintf(stderr, gettext("  -d, --debug            Print debugging messages to stderr (also sets -v 3)\n"));
+  fprintf(stderr, gettext("  -u, --unchanged_out          Filename of output bin (.bam/.sam) for original reads which did not map to bridge\n"));
+  fprintf(stderr, gettext("  -b, --bridged_out            Filename of output bin (.bam/.sam) for reads that have been newly mapped to bridge\n"));
+  fprintf(stderr, gettext("  -r, --remap-out              Filename of output bin (.bam/.sam) for reads that need remapping against the full reference\n"));
+  fprintf(stderr, gettext("  -s, --buffer_size            Size of output buffer (in reads) [default: %d]\n"), BINNIE_DEFAULT_BUFFER_SIZE);
+  fprintf(stderr, gettext("  -m, --max_buffer_bases       Size of output buffer (in bases) [default: %d]\n"), BINNIE_DEFAULT_BUFFER_BASES);
+  fprintf(stderr, gettext("  -i, --ignore_rg              Ignore read group (RG) when matching reads between original and bridge\n"));
+  fprintf(stderr, gettext("  -a, --assume_unmapped_paired Assume that all unmapped reads belong to templates with exactly 2 segments\n"));
+  fprintf(stderr, gettext("  -h, --help                   Print short help message and exit\n"));
+  fprintf(stderr, gettext("  -v, --verbose[=level]        Increase/Set level of verbosity (-vvv sets level 3 as does --verbose=3)\n"));
+#ifdef DEBUG
+  fprintf(stderr, gettext("  -d, --debug                  Print debugging messages to stderr (also sets -v 3)\n"));
+#endif
 }
 
 /* 
- * binnie procedure
- * ----------------
- * 
- * 1. Individual Reads processed into a buffer containing the read data and a result bin: 
- * --------------------------------------
- * Original  Bridge    Bin
- * --------------------------------------
- * Unmapped  Unmapped  Unchanged
- * Unmapped  MQ >= 0   Bridged
- * MQ == 0   Unmapped  Unchanged
- * MQ == 0   MQ == 0   Unchanged*
- * MQ == 0   MQ > 0    Remap
- * MQ > 0    Unmapped  Unchanged
- * MQ > 0    MQ == 0   Remap
- * MQ > 0    MQ > 0    Remap
- * Deleted   (any)     Remap
- * --------------------------------------
+ * main
+ * ----
  *
- * 2. Check if the read's pair is already in the buffer -- if it is, then update the 
- * other read to note that it's pair is here and change the result bin for both reads: 
- * ------------------------------------------
- * Result_1   Result_2   Bin_1  Bin_2
- * ------------------------------------------
- * Remap      (any)      Remap  Remap
- * (any)      Remap      Remap  Remap
- * Unchanged  Bridged    Remap  Remap
- * Bridged    Unchanged  Remap  Remap
- * ------------------------------------------
- *
- * 3. When the buffer is full, start writing to output bins, but first perform one final check: 
- * if a read's pair has not been added to buffer, then change its bin to Remap.
+ * Sets defaults, processes command-line options and arguments, opens 
+ * input and output files, calls binnie_process to do the processing, 
+ * cleans up, and exits.
  *
  */
-
-int main(int argc, char** argv) 
+int main(int argc, char **argv) 
 {
 
   /* setup progname */
@@ -136,12 +124,18 @@ int main(int argc, char** argv)
 
   /* init globals */
   verbosity = 0;
-  debug_flag = 0;
+#ifdef DEBUG
+  debug_flag = false;
+#endif
+  ignore_rg = false;
+  assume_unmapped_paired = false;
+  buffer_size = BINNIE_DEFAULT_BUFFER_SIZE;
+  max_buffer_bases = BINNIE_DEFAULT_BUFFER_BASES;
   unchanged_out_file = NULL;
   bridged_out_file = NULL;
   remap_out_file = NULL;
   
-  blog(9, "main: started");
+  DLOG("main: started");
 
   /* setup gettext */
   //setlocale (LC_ALL, "");
@@ -156,18 +150,24 @@ int main(int argc, char** argv)
       int option_index;
       static struct option binnie_options[] =
 	{
- 	  {"verbose",	        optional_argument,	0,	 0 },
- 	  {"verbose",           no_argument,		0,	'v'},
-	  {"debug",		no_argument,		0,	'd'},
-	  {"help",		no_argument,		0,	'h'},
-	  {"unchanged_out",	required_argument,	0,	'u'},
-	  {"bridged_out",	required_argument,	0,	'b'},
-	  {"remap_out",		required_argument,	0,	'r'},
+	  {"unchanged_out",		required_argument,	0,	'u'},
+	  {"bridged_out",		required_argument,	0,	'b'},
+	  {"remap_out",			required_argument,	0,	'r'},
+	  {"buffer_size",		required_argument,	0,	's'},
+	  {"max_buffer_bases",  	required_argument,	0,	'm'},
+	  {"ignore_rg",         	no_argument,            0,      'i'},
+	  {"assume_unmapped_paired",    no_argument,            0,      'a'},
+	  {"help",			no_argument,		0,	'h'},
+ 	  {"verbose",	        	optional_argument,	0,	 0 },
+ 	  {"verbose",           	no_argument,		0,	'v'},
+#ifdef DEBUG
+	  {"debug",			no_argument,		0,	'd'},
+#endif
 	  {0, 0, 0, 0}
 	};
       option_index = 0;
       
-      c = getopt_long(argc, argv, "vdhu:b:r:", binnie_options, &option_index);
+      c = getopt_long(argc, argv, "u:b:r:s:m:ihvd", binnie_options, &option_index);
 
       if (c < 0)
 	break;
@@ -185,12 +185,26 @@ int main(int argc, char** argv)
 	case 'v': 
 	  verbosity++;
 	  break;
+#ifdef DEBUG
 	case 'd':
-	  debug_flag = 1;
+	  debug_flag = true;
+	  break;
+#endif
+	case 'i':
+	  ignore_rg = true;
+	  break;
+	case 'a':
+	  assume_unmapped_paired = true;
 	  break;
 	case 'h':
 	  print_help();
-	  exit(0);
+	  exit(BINNIE_EXIT_SUCCESS);
+	  break;
+	case 's':
+	  buffer_size = atoi(optarg);
+	  break;
+	case 'm':
+	  max_buffer_bases = atoi(optarg);
 	  break;
 	case 'u':
 	  unchanged_out_file = xstrdup(optarg);
@@ -216,15 +230,37 @@ int main(int argc, char** argv)
       error(0, 0, gettext("verbosity set to %u"), verbosity);
     }
 
-  if (debug_flag != 0)
+#ifdef DEBUG
+  if (debug_flag)
     {
       error(0, 0, gettext("printing debugging messages"));
+    }
+#endif
+
+  if (ignore_rg)
+    {
+      blog(0, gettext("ignoring read group (RG) when matching original and bridge-mapped reads"));
+    }
+
+  if (assume_unmapped_paired)
+    {
+      blog(0, gettext("assuming all unmapped reads belong to a template with exactly two segments"));
+    }
+
+  if (buffer_size > 0)
+    {
+      blog(0, gettext("buffer size set to %d reads"), buffer_size);
+    }
+
+  if (max_buffer_bases > 0)
+    {
+      blog(0, gettext("max buffer bases set to %d bases"), max_buffer_bases);
     }
 
   /* get remaining command-line arguments (original and bridge input file names) */
   if (optind + 2 != argc) {
     print_usage();
-    err(1, gettext("two filenames should be given as arguments following the options"));
+    err(BINNIE_EXIT_ERR_ARGS, gettext("two filenames should be given as arguments following the options"));
   } else {
     original_in_file = xstrdup(argv[optind++]);
     blog(3, gettext("original_in_file set to %s"), original_in_file);
@@ -241,19 +277,19 @@ int main(int argc, char** argv)
   if (original_in_fp <= 0 || bridge_in_fp <= 0) 
     {
       /* print error and exit */
-      err(2, gettext("could not open one or more input files"));
+      err(BINNIE_EXIT_ERR_IN_FILES, gettext("could not open one or more input files"));
     }
   else 
     {
-      blog(1, gettext("input files opened"));
-      blog(2, gettext("\toriginal=[%s]"), original_in_fp->fn);
-      blog(2, gettext("\tbridge=[%s]"), bridge_in_fp->fn);
+      blog(0, gettext("input files opened"));
+      blog(1, gettext("\toriginal=[%s]"), original_in_fp->fn);
+      blog(1, gettext("\tbridge=[%s]"), bridge_in_fp->fn);
     }
 
   /* name output files after input if they aren't specified */
   if (unchanged_out_file == NULL) 
     {
-      blog(9, gettext("overriding unchanged_out_file with original_in_file + unchanged_out_suffix"));
+      DLOG(gettext("overriding unchanged_out_file with original_in_file + unchanged_out_suffix"));
       unchanged_out_file = xmalloc(strlen(original_in_file) + strlen(unchanged_out_suffix) + 1);
       strcat(unchanged_out_file, original_in_file);
       strcat(unchanged_out_file, unchanged_out_suffix);
@@ -262,7 +298,7 @@ int main(int argc, char** argv)
 
   if (bridged_out_file == NULL) 
     {
-      blog(9, gettext("overriding unchanged_out_file with original_in_file + bridged_out_suffix"));
+      DLOG(gettext("overriding unchanged_out_file with original_in_file + bridged_out_suffix"));
       bridged_out_file = xmalloc(strlen(original_in_file) + strlen(bridged_out_suffix) + 1);
       strcat(bridged_out_file, original_in_file);
       strcat(bridged_out_file, bridged_out_suffix);
@@ -271,7 +307,7 @@ int main(int argc, char** argv)
 
   if (remap_out_file == NULL) 
     {
-      blog(9, gettext("overriding unchanged_out_file with original_in_file + remap_out_suffix"));
+      DLOG(gettext("overriding unchanged_out_file with original_in_file + remap_out_suffix"));
       remap_out_file = xmalloc(strlen(original_in_file) + strlen(remap_out_suffix) + 1);
       strcat(remap_out_file, original_in_file);
       strcat(remap_out_file, remap_out_suffix);
@@ -288,85 +324,42 @@ int main(int argc, char** argv)
   if (unchanged_out_fp <= 0 || bridged_out_fp <= 0 || remap_out_fp <= 0)
     {
       /* print error and exit */
-      err(3, gettext("could not open one or more output files"));
+      err(BINNIE_EXIT_ERR_OUT_FILES, gettext("could not open one or more output files"));
     }
   else 
     {
-      blog(1, gettext("output files opened"));
-      blog(2, gettext("\tunchanged=[%s]"), unchanged_out_fp->fn);
-      blog(2, gettext("\tbridged=[%s]"), bridged_out_fp->fn);
-      blog(2, gettext("\tremap=[%s]"), remap_out_fp->fn);
+      blog(0, gettext("output files opened"));
+      blog(1, gettext("\tunchanged=[%s]"), unchanged_out_fp->fn);
+      blog(1, gettext("\tbridged=[%s]"), bridged_out_fp->fn);
+      blog(1, gettext("\tremap=[%s]"), remap_out_fp->fn);
     }
 
 
-  /* read BAM/SAM headers */
-  blog(3, gettext("main: reading BAM/SAM headers"));
-  bam_hdr_t *original_header = sam_hdr_read(original_in_fp);
-  blog(9, gettext("main: original has %d targets"), original_header->n_targets);
-  bam_hdr_t *bridge_header = sam_hdr_read(bridge_in_fp);
-  blog(9, gettext("main: bridge has %d targets"), bridge_header->n_targets);
+  /* process data */
+  blog(1, gettext("beginning binnie processing"));
+  binnie_process(buffer_size, max_buffer_bases, original_in_fp, bridge_in_fp, unchanged_out_fp, bridged_out_fp, remap_out_fp);
 
 
-  /* write BAM/SAM headers */
-  blog(3, gettext("main: writing BAM/SAM headers"));
-  sam_hdr_write(unchanged_out_fp, original_header);
-  sam_hdr_write(bridged_out_fp, original_header);
-  sam_hdr_write(remap_out_fp, original_header);
-  
+  /* clean up */
+  blog(1, gettext("cleaning up"));
 
-  /* initialize BAM/SAM read buffers */
-  blog(3, gettext("main: initializing BAM/SAM read buffers"));
-  bam1_t* original_read = bam_init1();
-  bam1_t* bridge_read = bam_init1();
-
-
-  /* reading original and bridge */
-  blog(3, gettext("main: beginning read processing"));
-  int success = 1;
-  do 
-    {
-      if (sam_read1(original_in_fp, original_header, original_read) < 0)
-	{
-	  error(0, errno, gettext("failed to read from original"));
-	  success = 0;
-	}
-      if (sam_read1(bridge_in_fp, bridge_header, bridge_read) < 0) 
-	{
-	  error(0, errno, gettext("failed to read from bridge"));
-	  success = 0;
-	}
-      
-      if (success)
-	{
-	  /* for now just write original to all three files */
-	  sam_write1(unchanged_out_fp, original_header, original_read);
-	  sam_write1(bridged_out_fp, original_header, original_read);
-	  sam_write1(remap_out_fp, original_header, original_read);
-	}
-    } while(success);
-  
-  
-  blog(3, gettext("main: destroying BAM/SAM read buffers"));
-  if (original_read) 
-    bam_destroy1(original_read); 
-  if (bridge_read) 
-    bam_destroy1(bridge_read); 
-
-  blog(3, gettext("main: closing open files"));
+  blog(2, gettext("closing open files"));
   binnie_close(original_in_fp);
   binnie_close(bridge_in_fp);
   binnie_close(unchanged_out_fp);
   binnie_close(bridged_out_fp);
   binnie_close(remap_out_fp);
 
-  blog(3, gettext("main: freeing memory"));
+  blog(2, gettext("freeing memory"));
   free(original_in_file);
   free(bridge_in_file);
   free(unchanged_out_file);
   free(bridged_out_file);
   free(remap_out_file);
 
-  blog(9, gettext("main: returning"));
+
+  blog(1, gettext("finished!"));
+  DLOG(gettext("main: returning"));
   return 0;
 }
 

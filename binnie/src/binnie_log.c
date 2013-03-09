@@ -41,7 +41,12 @@
  */
 void blog(unsigned int level, const char *msgfmt, ...)
 {
-  if(verbosity >= level || debug_flag) {
+  if(
+     verbosity >= level 
+#ifdef DEBUG
+     || debug_flag
+#endif
+     ) {
     va_list argp;
     fprintf(stderr, "%s(%u): ", program_name, level);
     va_start(argp, msgfmt);
@@ -50,4 +55,18 @@ void blog(unsigned int level, const char *msgfmt, ...)
     fprintf(stderr, "\n");
   }
 }
+
+#ifdef DEBUG
+void DLOG(const char *msgfmt, ...)
+{
+ if(debug_flag) {
+    va_list argp;
+    fprintf(stderr, "%s(D): ", program_name);
+    va_start(argp, msgfmt);
+    vfprintf(stderr, msgfmt, argp);
+    va_end(argp);
+    fprintf(stderr, "\n");
+  }
+}
+#endif
 
