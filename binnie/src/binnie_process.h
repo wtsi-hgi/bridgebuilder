@@ -48,6 +48,8 @@ typedef struct binnie_binned_read_t_ {
   binnie_bin_t  bin;
   int32_t       expected_mate_count;
   int32_t       mate_count;
+  int32_t       original_refid;
+  int32_t       original_pos;
   struct binnie_binned_read_t_ *next_mate;
   struct binnie_binned_read_t_ *prev_mate;
 } binnie_binned_read_t;
