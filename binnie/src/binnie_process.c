@@ -363,6 +363,7 @@ bool binnie_process(int buffer_size, int max_buffer_bases, samFile *original_in_
               )
         {
           /* get a read from buffer */
+	  DLOG("binnie_process: calling gl_list_get_at 0");
           bbr = (binnie_binned_read_t *) gl_list_get_at(output_buffer, 0);
           
 
@@ -400,6 +401,7 @@ bool binnie_process(int buffer_size, int max_buffer_bases, samFile *original_in_
           }
           
           /* remove the read from the buffer (this will call bbr_dispose for us) */
+	  DLOG("binnie_process: calling gl_list_remove_at 0");
           success = gl_list_remove_at(output_buffer, 0);
           if (!success)
             {
@@ -409,6 +411,7 @@ bool binnie_process(int buffer_size, int max_buffer_bases, samFile *original_in_
           if (gl_list_size(output_buffer) > 0)
             {
               /* still have reads in buffer, update buffer_first_pos to position of new first read in buffer */
+	      DLOG("binnie_process: calling gl_list_get_at 0");
               bbr = (binnie_binned_read_t *) gl_list_get_at(output_buffer, 0);
               buffer_first_pos = br_get_pos(bbr->br);
             }
@@ -780,14 +783,17 @@ void binnie_read_buffer (binnie_binned_read_t *bbr, gl_list_t output_buffer)
   DLOG("binnie_read_buffer()");
 
   /* search for a node like this one */
+  DLOG("binnie_read_buffer: calling gl_list_search");
   node = gl_list_search(output_buffer, bbr);
   if (node == NULL) 
     {
       /* this will be the first node for this template in the buffer, just add it */
+      DLOG("binnie_read_buffer: node not found, calling gl_list_add_last");
       gl_list_add_last(output_buffer, bbr);
     }
   else /* node != NULL */
     {
+      DLOG("binnie_read_buffer: matching node found");
 
       /* at least one read for this template is already queued */
       if (bbr->expected_mate_count == 0)
@@ -797,6 +803,7 @@ void binnie_read_buffer (binnie_binned_read_t *bbr, gl_list_t output_buffer)
         }
 
       /* wind to beginning of linked list of buffered reads */
+      DLOG("binnie_read_buffer: calling gl_list_node_value");
       bbri = (binnie_binned_read_t *) gl_list_node_value(output_buffer, node);
       while (bbri->prev_mate != NULL)
         {
@@ -850,6 +857,7 @@ void binnie_read_buffer (binnie_binned_read_t *bbr, gl_list_t output_buffer)
       /* attach the new read to the end of the linked list and add it to the buffer */
       bbri->next_mate = bbr;
       bbr->prev_mate = bbri;
+      DLOG("binnie_read_buffer: calling gl_list_add_last");
       gl_list_add_last(output_buffer, bbr);
       
 
@@ -1218,6 +1226,7 @@ bool br_equals(const binnie_read_t *br1, const binnie_read_t *br2)
   bool equal;
   DLOG("br_equals()");
   
+  DLOG("br_equals: ignore_rg=[%d] br1 rg=[%s] uid=[%s] br2 rg=[%s] uid=[%s]", ignore_rg, br_get_read_group(br1), br_get_uid_alloc(br1), br_get_read_group(br2), br_get_uid_alloc(br2));
   equal = ( (ignore_rg || (strcmp(br_get_read_group(br1), br_get_read_group(br2)) == 0))
             && (strcmp(br_get_qname(br1), br_get_qname(br2)) == 0) );
   
@@ -1351,7 +1360,7 @@ static bool bbr_equals(const void *elt1, const void *elt2)
  */
 size_t bbr_hashcode(const void *elt)
 {
-  const binnie_binned_read_t *bbr;
+  binnie_binned_read_t *bbr;
   size_t hashcode;
   char *uid;
 
@@ -1360,10 +1369,11 @@ size_t bbr_hashcode(const void *elt)
 
   /* get uid */
   uid = br_get_uid_alloc(bbr->br);
-  hashcode = hash_pjw(uid, sizeof(size_t));
+  hashcode = hash_pjw(uid, BINNIE_TABLESIZE);
+  DLOG("bbr_hashcode: have hashcode=[%d] for uid=[%s] tablesize=[%z]", hashcode, uid, BINNIE_TABLESIZE);
   free((void *)uid);
   
-  DLOG("bbr_hashcode: returning hashcode=[%d]", hashcode);
+  DLOG("bbr_hashcode: returning hashcode=[%z]", hashcode);
   return hashcode;
 }
 

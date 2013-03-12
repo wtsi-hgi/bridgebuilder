@@ -22,7 +22,10 @@
 #ifndef BINNIE_H
 #define BINNIE_H
 
+/* gnulib headers */
 #include <stdbool.h>
+#include "size_max.h" /* to ensure SIZE_MAX is available */
+
 
 /* 
  * if true, don't compare RG tags between original and bridge when matching reads
@@ -34,6 +37,10 @@ bool ignore_rg;
 /* option defaults */
 #define BINNIE_DEFAULT_BUFFER_SIZE  1000000
 #define BINNIE_DEFAULT_BUFFER_BASES 10000
+
+
+/* hash parameters */
+#define BINNIE_TABLESIZE SIZE_MAX
 
 
 /* output bins */
