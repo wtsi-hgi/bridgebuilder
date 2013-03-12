@@ -45,7 +45,7 @@
  * Opens the file named FILENAME for writing, with the mode (BAM/SAM)
  * depending on the file extension.
  *
- * Returns: a pointer to the opened samFile, or < 0 on error.
+ * Returns: a pointer to the opened samFile, or 0 on error.
  */
 samFile *binnie_open_out(const char *filename) 
 {
@@ -54,6 +54,7 @@ samFile *binnie_open_out(const char *filename)
 
   DLOG("binnie_open_out: filename=[%s]", filename);
 
+  fp = 0;
   if(!filename) 
     {
       error(0, 0, "binnie_open_out: null filename");
@@ -99,7 +100,7 @@ samFile *binnie_open_out(const char *filename)
  * Opens the file named FILENAME for reading, with the mode (BAM/SAM)
  * depending on the file extension.
  *
- * Returns: a pointer to the opened samFile, or < 0 on error.
+ * Returns: a pointer to the opened samFile, or 0 on error.
  */
 samFile* binnie_open_in(const char *filename) 
 {
@@ -108,6 +109,7 @@ samFile* binnie_open_in(const char *filename)
 
   DLOG("binnie_open_in: filename=[%s]", filename);
   
+  fp = 0;
   if(!filename) 
     {
       error(0, 0, "binnie_open_in: null filename");
