@@ -99,7 +99,6 @@ void print_help()
   fprintf(stderr, gettext("  -s, --buffer_size            Size of output buffer (in reads) [default: %d]\n"), BINNIE_DEFAULT_BUFFER_SIZE);
   fprintf(stderr, gettext("  -m, --max_buffer_bases       Size of output buffer (in bases) [default: %d]\n"), BINNIE_DEFAULT_BUFFER_BASES);
   fprintf(stderr, gettext("  -i, --ignore_rg              Ignore read group (RG) when matching reads between original and bridge\n"));
-  fprintf(stderr, gettext("  -a, --assume_unmapped_paired Assume that all unmapped reads belong to templates with exactly 2 segments\n"));
   fprintf(stderr, gettext("  -h, --help                   Print short help message and exit\n"));
   fprintf(stderr, gettext("  -v, --verbose[=level]        Increase/Set level of verbosity (-vvv sets level 3 as does --verbose=3)\n"));
 #ifdef DEBUG
@@ -128,7 +127,6 @@ int main(int argc, char **argv)
   debug_flag = false;
 #endif
   ignore_rg = false;
-  assume_unmapped_paired = false;
   buffer_size = BINNIE_DEFAULT_BUFFER_SIZE;
   max_buffer_bases = BINNIE_DEFAULT_BUFFER_BASES;
   unchanged_out_file = NULL;
@@ -156,7 +154,6 @@ int main(int argc, char **argv)
 	  {"buffer_size",		required_argument,	0,	's'},
 	  {"max_buffer_bases",  	required_argument,	0,	'm'},
 	  {"ignore_rg",         	no_argument,            0,      'i'},
-	  {"assume_unmapped_paired",    no_argument,            0,      'a'},
 	  {"help",			no_argument,		0,	'h'},
  	  {"verbose",	        	optional_argument,	0,	 0 },
  	  {"verbose",           	no_argument,		0,	'v'},
@@ -192,9 +189,6 @@ int main(int argc, char **argv)
 #endif
 	case 'i':
 	  ignore_rg = true;
-	  break;
-	case 'a':
-	  assume_unmapped_paired = true;
 	  break;
 	case 'h':
 	  print_help();
@@ -240,11 +234,6 @@ int main(int argc, char **argv)
   if (ignore_rg)
     {
       blog(0, gettext("ignoring read group (RG) when matching original and bridge-mapped reads"));
-    }
-
-  if (assume_unmapped_paired)
-    {
-      blog(0, gettext("assuming all unmapped reads belong to a template with exactly two segments"));
     }
 
   if (buffer_size > 0)

@@ -142,7 +142,7 @@ bool binnie_process(int buffer_size, int max_buffer_bases, samFile *original_in_
                                        bbr_equals, 
                                        bbr_hashcode, 
                                        bbr_dispose, 
-                                       true);
+                                       false);
   
   
   /* Allocate/initialize BAM/SAM read buffers. */
@@ -330,7 +330,7 @@ bool binnie_process(int buffer_size, int max_buffer_bases, samFile *original_in_
 	  DLOG(gettext("binnie_process: last_refid and last_pos updated to last_refid=[%d] last_pos=[%d]"), last_refid, last_pos);
 	  
 	  
-	  /* add read buffer, update mates in buffer, etc */
+	  /* add read to buffer, update mates in buffer, etc */
 	  DLOG(gettext("binnie_process: calling binnie_read_buffer"));
 	  binnie_read_buffer(bbr, output_buffer);
 	  
@@ -358,8 +358,8 @@ bool binnie_process(int buffer_size, int max_buffer_bases, samFile *original_in_
       reads_output = 0;
       while ( (original_done && (gl_list_size(output_buffer) > 0))
               || (new_refid && (gl_list_size(output_buffer) > 0))
-              || (gl_list_size(output_buffer) >= buffer_size)
-              || ( (buffer_last_pos - buffer_first_pos) >= max_buffer_bases)
+              || ((buffer_size > 0) && (gl_list_size(output_buffer) >= buffer_size))
+              || ((max_buffer_bases > 0) && ((buffer_last_pos - buffer_first_pos) >= max_buffer_bases))
               )
         {
           /* get a read from buffer */
@@ -724,29 +724,33 @@ void fixup_bridge_from_original (binnie_read_t *bridge_read, binnie_read_t *orig
       blog(4, gettext("set bridge read tag FI=[%d]"), bam_aux2i(bam_aux_get(bridge_read->bam_read, "FI")));
     }
 
-  DLOG(gettext("fixup_bridge_from_original: checking if we need to override bridge_read RG tag."));
-  original_tag = bam_aux_get(original_read->bam_read, "RG");
-  if (original_tag)
+  /* only fixup RG if we are ignoring RG in matching, otherwise we already know they are the same */
+  if (ignore_rg)
     {
-      int rg_len;
-      char *rg;
-
-      /* we have RG tag in original, check for RG tag in bridge */
-      bridge_tag = bam_aux_get(bridge_read->bam_read, "RG");
-      if (bridge_tag)
+      DLOG(gettext("fixup_bridge_from_original: checking if we need to override bridge_read RG tag."));
+      original_tag = bam_aux_get(original_read->bam_read, "RG");
+      if (original_tag)
 	{
-	  /* have tag in bridge, delete it */
-	  bam_aux_del(bridge_read->bam_read, bridge_tag);
+	  int rg_len;
+	  char *rg;
+	  
+	  /* we have RG tag in original, check for RG tag in bridge */
+	  bridge_tag = bam_aux_get(bridge_read->bam_read, "RG");
+	  if (bridge_tag)
+	    {
+	      /* have tag in bridge, delete it */
+	      bam_aux_del(bridge_read->bam_read, bridge_tag);
+	    }
+	  
+	  rg = bam_aux2Z(original_tag);
+	  rg_len = (int) strlen(rg);
+	  blog(8, gettext("have original RG=[%s] len=[%d]"), rg, rg_len);
+	  
+	  /* add original RG tag to bridge */
+	  bam_aux_append(bridge_read->bam_read, "RG", 'Z', rg_len+1, rg);
+	  
+	  blog(4, gettext("set bridge read tag RG=[%s]"), bam_aux2Z(bam_aux_get(bridge_read->bam_read, "RG")));
 	}
-
-      rg = bam_aux2Z(original_tag);
-      rg_len = (int) strlen(rg);
-      blog(8, gettext("have original RG=[%s] len=[%d]"), rg, rg_len);
-      
-      /* add original RG tag to bridge */
-      bam_aux_append(bridge_read->bam_read, "RG", 'Z', rg_len+1, rg);
-
-      blog(4, gettext("set bridge read tag RG=[%s]"), bam_aux2Z(bam_aux_get(bridge_read->bam_read, "RG")));
     }
 
 } /* fixup_bridge_from_original */
@@ -1243,15 +1247,19 @@ char *br_get_uid_alloc(const binnie_read_t *br)
 
   DLOG("br_get_uid_alloc()");
   
+  /*
   if (ignore_rg)
     {
       read_group = "";
     }
   else
     {
-      read_group = br_get_read_group(br);
+  */
+  read_group = br_get_read_group(br);
+  /*
     }
-  
+  */  
+
   qname = br_get_qname(br);
 
   if ( asprintf(&uid, "%s\n%s", read_group, qname) < 0 )

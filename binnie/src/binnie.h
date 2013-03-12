@@ -25,20 +25,15 @@
 #include <stdbool.h>
 
 /* 
- * if true, don't compare RG tags (i.e. in case they are missing from one or both files) 
+ * if true, don't compare RG tags between original and bridge when matching reads
+ * (i.e. in case they are missing from the bridge-mapped file) 
  */
 bool ignore_rg;
 
-/* 
- * if true, assume that all unmapped reads belong to templates with exactly 2 segments.  
- * useful for broken BAM/SAM input which have the 0x1 flag unset for unmapped paired reads. 
- */
-bool assume_unmapped_paired;
-
 
 /* option defaults */
-#define BINNIE_DEFAULT_BUFFER_SIZE  5000000
-#define BINNIE_DEFAULT_BUFFER_BASES 100000
+#define BINNIE_DEFAULT_BUFFER_SIZE  1000000
+#define BINNIE_DEFAULT_BUFFER_BASES 10000
 
 
 /* output bins */
