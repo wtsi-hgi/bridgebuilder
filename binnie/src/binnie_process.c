@@ -104,6 +104,8 @@ bool binnie_process(int buffer_size, int max_buffer_bases, samFile *original_in_
   bam_hdr_t *remap_header;
   uint32_t read_count;
   bool new_refid;
+  uint32_t buffer_read_count;
+  uint32_t buffer_read_count_max;
 
   DLOG("binnie_process()");
 
@@ -114,6 +116,8 @@ bool binnie_process(int buffer_size, int max_buffer_bases, samFile *original_in_
   original_done = false;
   bridge_done = false;
   new_refid = true;
+  buffer_read_count = 0;
+  buffer_read_count_max = 0;
 
   /* read BAM/SAM headers */
   blog(3, gettext("reading headers"));
@@ -340,7 +344,7 @@ bool binnie_process(int buffer_size, int max_buffer_bases, samFile *original_in_
 	  DLOG(gettext("binnie_process: updated buffer_last_pos to buffer_last_pos=[%d]"), buffer_last_pos);
 
 	  /* if this is the first read in the buffer, also update buffer_first_pos */
-	  if (gl_list_size(output_buffer) == 1)
+	  if (buffer_read_count == 0)
 	    {
 	      DLOG(gettext("binnie_process: buffer now contains a single read. updating buffer_first_post from buffer_first_pos=[%d]"), buffer_first_pos);
 	      buffer_first_pos = buffer_last_pos;
@@ -349,19 +353,29 @@ bool binnie_process(int buffer_size, int max_buffer_bases, samFile *original_in_
       
 	}
 
+
+      /* update buffer_read_count and set buffer_read_count_max */
+      buffer_read_count = gl_list_size(output_buffer);
+      if (buffer_read_count > buffer_read_count_max)
+	{
+	  buffer_read_count_max = buffer_read_count;
+	}
+
+
       /* 
        * if original is done or if refid has changed, it's time to flush the buffer completely.  
        * if buffer is "full" (size larger than buffer_size or position range greater than 
        * max_buffer_bases), then we need to flush until the size and/or position are no longer full.  
        */
-      DLOG(gettext("binnie_process: beginning buffer output loop.  original_done=[%d] gl_list_size(output_buffer)=[%d] new_refid=[%d] buffer_size=[%d] buffer_last_pos=[%d] buffer_first_pos=[%d] (buffer_last_pos-buffer_first_pos)=[%d] max_buffer_bases=[%d]"), original_done, gl_list_size(output_buffer), new_refid, buffer_size, buffer_last_pos, buffer_first_pos, (buffer_last_pos-buffer_first_pos), max_buffer_bases);
+      DLOG(gettext("binnie_process: beginning buffer output loop.  original_done=[%d] buffer_read_count=[%d] new_refid=[%d] buffer_size=[%d] buffer_last_pos=[%d] buffer_first_pos=[%d] (buffer_last_pos-buffer_first_pos)=[%d] max_buffer_bases=[%d]"), original_done, buffer_read_count, new_refid, buffer_size, buffer_last_pos, buffer_first_pos, (buffer_last_pos-buffer_first_pos), max_buffer_bases);
       reads_output = 0;
-      while ( (original_done && (gl_list_size(output_buffer) > 0))
-              || (new_refid && (gl_list_size(output_buffer) > 0))
-              || ((buffer_size > 0) && (gl_list_size(output_buffer) >= buffer_size))
+      while ( (original_done && (buffer_read_count > 0))
+              || (new_refid && (buffer_read_count > 0))
+              || ((buffer_size > 0) && (buffer_read_count >= buffer_size))
               || ((max_buffer_bases > 0) && ((buffer_last_pos - buffer_first_pos) >= max_buffer_bases))
               )
         {
+
           /* get a read from buffer */
 	  DLOG("binnie_process: calling gl_list_get_at 0");
           bbr = (binnie_binned_read_t *) gl_list_get_at(output_buffer, 0);
@@ -407,22 +421,24 @@ bool binnie_process(int buffer_size, int max_buffer_bases, samFile *original_in_
             {
               errx(BINNIE_EXIT_ERR_BUFFER_REMOVE, gettext("binnie_process: failure removing node from buffer"));
             }
-          
-          if (gl_list_size(output_buffer) > 0)
+
+	  /* update read count for next iteration */
+          buffer_read_count = gl_list_size(output_buffer);
+          if (buffer_read_count > 0)
             {
               /* still have reads in buffer, update buffer_first_pos to position of new first read in buffer */
 	      DLOG("binnie_process: calling gl_list_get_at 0");
               bbr = (binnie_binned_read_t *) gl_list_get_at(output_buffer, 0);
               buffer_first_pos = br_get_pos(bbr->br);
             }
-          else  /* gl_list_size <= 0 */
+          else  /* buffer_read_count <= 0 */
             {
               /* no reads in buffer, reset buffer_first_pos and buffer_last_pos to 0 */
               buffer_first_pos = 0;
               buffer_last_pos = 0;
             }
 
-          DLOG(gettext("binnie_process: end of buffer output iteration.  original_done=[%d] gl_list_size(output_buffer)=[%d] new_refid=[%d] buffer_size=[%d] buffer_last_pos=[%d] buffer_first_pos=[%d] (buffer_last_pos-buffer_first_pos)=[%d] max_buffer_bases=[%d]"), original_done, gl_list_size(output_buffer), new_refid, buffer_size, buffer_last_pos, buffer_first_pos, (buffer_last_pos-buffer_first_pos), max_buffer_bases);
+          DLOG(gettext("binnie_process: end of buffer output iteration.  original_done=[%d] buffer_read_count=[%d] new_refid=[%d] buffer_size=[%d] buffer_last_pos=[%d] buffer_first_pos=[%d] (buffer_last_pos-buffer_first_pos)=[%d] max_buffer_bases=[%d]"), original_done, buffer_read_count, new_refid, buffer_size, buffer_last_pos, buffer_first_pos, (buffer_last_pos-buffer_first_pos), max_buffer_bases);
 
         } /* while original_done ... || new_refid ... || ... > buffer_size || ... > max_buffer_bases */
       DLOG(gettext("binnie_process: finished buffer output loop after outputting [%d] reads."), reads_output);
@@ -446,15 +462,18 @@ bool binnie_process(int buffer_size, int max_buffer_bases, samFile *original_in_
 
   /* check if buffer still has reads remaining */
   DLOG(gettext("binnie_process: checking if output buffer is empty"));
-  if (gl_list_size (output_buffer) > 0) 
+  buffer_read_count = gl_list_size(output_buffer);
+  if (buffer_read_count > 0) 
     {
       /* FATAL ERROR */
-      errx(BINNIE_EXIT_ERR_BUFFER_NOT_EMPTY, gettext("output_buffer was not empty at end of binnie_process."), gl_list_size (output_buffer));
+      errx(BINNIE_EXIT_ERR_BUFFER_NOT_EMPTY, gettext("output_buffer was not empty at end of binnie_process."), buffer_read_count);
     }
   
 
   blog (3, gettext("freeing the read buffer"));
   gl_list_free (output_buffer);
+
+  blog(1, gettext("finished processing reads. had a maximum of %u reads in buffer."), buffer_read_count_max);
 
   DLOG("binnie_process: returning true");
   return true;
