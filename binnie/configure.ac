@@ -1,5 +1,7 @@
 # Process this file with autoconf to produce a configure script.
-AC_INIT([binnie], [0.2], [jr17@sanger.ac.uk])
+AC_INIT([binnie],
+        m4_esyscmd([build-aux/git-version-gen .tarball-version]),
+        [jr17@sanger.ac.uk])
 AC_PREREQ([2.69])
 
 # Check to make sure that the src dir actually exists (sanity check)
