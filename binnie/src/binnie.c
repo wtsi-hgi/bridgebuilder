@@ -103,6 +103,7 @@ void print_help()
   fprintf(stderr, gettext("  -s, --buffer_size            Size of output buffer (in reads) [default: %d]\n"), BINNIE_DEFAULT_BUFFER_SIZE);
   fprintf(stderr, gettext("  -m, --max_buffer_bases       Size of output buffer (in bases) [default: %d]\n"), BINNIE_DEFAULT_BUFFER_BASES);
   fprintf(stderr, gettext("  -i, --ignore_rg              Ignore read group (RG) when matching reads between original and bridge\n"));
+  fprintf(stderr, gettext("  -a, --allow_sorted_unmapped  Allow reads with flag 0x4 set to be sorted according to their refid and pos\n"));
   fprintf(stderr, gettext("  -h, --help                   Print short help message and exit\n"));
   fprintf(stderr, gettext("  -v, --verbose[=level]        Increase/Set level of verbosity (-vvv sets level 3 as does --verbose=3)\n"));
 #ifdef DEBUG
@@ -132,6 +133,7 @@ int main(int argc, char **argv)
   debug_flag = false;
 #endif
   ignore_rg = false;
+  allow_sorted_unmapped = false;
   buffer_size = BINNIE_DEFAULT_BUFFER_SIZE;
   max_buffer_bases = BINNIE_DEFAULT_BUFFER_BASES;
   unchanged_out_file = NULL;
@@ -159,6 +161,7 @@ int main(int argc, char **argv)
 	  {"buffer_size",		required_argument,	0,	's'},
 	  {"max_buffer_bases",  	required_argument,	0,	'm'},
 	  {"ignore_rg",         	no_argument,            0,      'i'},
+	  {"allow_sorted_unmapped",    	no_argument,            0,      'a'},
 	  {"help",			no_argument,		0,	'h'},
  	  {"verbose",	        	optional_argument,	0,	 0 },
  	  {"verbose",           	no_argument,		0,	'v'},
@@ -170,7 +173,7 @@ int main(int argc, char **argv)
 	};
       option_index = 0;
       
-      c = getopt_long(argc, argv, "u:b:r:s:m:ihvdV", binnie_options, &option_index);
+      c = getopt_long(argc, argv, "u:b:r:s:m:iahvdV", binnie_options, &option_index);
 
       if (c < 0)
 	break;
@@ -202,6 +205,9 @@ int main(int argc, char **argv)
 	  break;
 	case 'i':
 	  ignore_rg = true;
+	  break;
+	case 'a':
+	  allow_sorted_unmapped = true;
 	  break;
 	case 'h':
 	  print_help();
@@ -244,6 +250,11 @@ int main(int argc, char **argv)
   if (ignore_rg)
     {
       blog(0, gettext("ignoring read group (RG) when matching original and bridge-mapped reads"));
+    }
+
+  if (allow_sorted_unmapped)
+    {
+      blog(0, gettext("allowing reads with 0x4 flag set to be sorted according to their refid and pos"));
     }
 
   if (buffer_size > 0)
