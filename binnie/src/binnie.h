@@ -35,6 +35,13 @@
 bool ignore_rg;
 
 
+/* 
+ * if true, allow unmapped (flag BAM_FUNMAP set) reads to be sorted according to their 
+ * refid and pos values instead of (or in addition to) being at the end of the file
+ */
+bool allow_sorted_unmapped;
+
+
 /* option defaults */
 #define BINNIE_DEFAULT_BUFFER_SIZE  1000000
 #define BINNIE_DEFAULT_BUFFER_BASES 10000

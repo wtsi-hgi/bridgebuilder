@@ -103,6 +103,7 @@ bool binnie_process(int buffer_size, int max_buffer_bases, samFile *original_in_
   bam_hdr_t *bridged_header;
   bam_hdr_t *remap_header;
   uint32_t read_count;
+  uint32_t bridge_read_count;
   bool new_refid;
   int buffer_read_count;
   int buffer_read_count_max;
@@ -156,6 +157,7 @@ bool binnie_process(int buffer_size, int max_buffer_bases, samFile *original_in_
   /* Read original and bridge in synchrony. */
   DLOG(gettext("binnie_process: beginning read processing loop"));
   read_count = 0;
+  bridge_read_count = 0;
   do 
     {
       binnie_read_t *original_read;
@@ -166,9 +168,6 @@ bool binnie_process(int buffer_size, int max_buffer_bases, samFile *original_in_
       int32_t pos;
       int32_t reads_output;
 
-      /* increment read_count */
-      read_count++;
-      
       DLOG(gettext("binnie_process: processing read [%d]"), read_count);
 
       DLOG(gettext("binnie_process: initializing original_read"));
@@ -183,6 +182,9 @@ bool binnie_process(int buffer_size, int max_buffer_bases, samFile *original_in_
           /* We have an original read, compare to current_bridge_read. */
           original_read->bam_read_present = true;
 
+	  /* increment read_count */
+	  read_count++;
+      
 	  /* get refid and pos from original */
 	  refid = br_get_refid(original_read);
 	  pos = br_get_pos(original_read);
@@ -197,7 +199,7 @@ bool binnie_process(int buffer_size, int max_buffer_bases, samFile *original_in_
       else 
         {
           /* An error occured reading the original file. */
-          errx(BINNIE_EXIT_ERR_READ_ORIG, gettext("binnie_process: error reading from original input file"));
+          errx(BINNIE_EXIT_ERR_READ_ORIG, gettext("binnie_process: error reading from original input file at read [%u]"), read_count);
         }
 
       if (new_refid)
@@ -221,6 +223,7 @@ bool binnie_process(int buffer_size, int max_buffer_bases, samFile *original_in_
             {
               /* Have a bridge-mapped read. */
               current_bridge_read->bam_read_present = true;
+	      bridge_read_count++;
             }
           else if ( ret == -1 )
             {
@@ -232,7 +235,7 @@ bool binnie_process(int buffer_size, int max_buffer_bases, samFile *original_in_
           else 
             {
               /* An error occurred reading the bridge file. */
-              errx(BINNIE_EXIT_ERR_READ_BRIDGE, gettext("binnie_process: error reading from bridge input file"));
+              errx(BINNIE_EXIT_ERR_READ_BRIDGE, gettext("binnie_process: error reading from bridge input file at read [%u]"), bridge_read_count);
             }
     
           DLOG(gettext("binnie_process: have bridge-mapped read at refid=[%d] pos=[%d]"), br_get_refid(current_bridge_read), br_get_pos(current_bridge_read));
@@ -269,7 +272,7 @@ bool binnie_process(int buffer_size, int max_buffer_bases, samFile *original_in_
 	  DLOG(gettext("binnie_process: checking that refid has not decreased.  refid=[%d] last_refid=[%d]"), refid, last_refid);
 	  if ( (refid < last_refid) && (refid != -1) && (last_refid != -1) )
 	    {
-	      errx(BINNIE_EXIT_ERR_BAM_UNSORTED, gettext("binnie_process: sort error -- current refid [%d] was less than the last one [%d]"), refid, last_refid);
+	      errx(BINNIE_EXIT_ERR_BAM_UNSORTED, gettext("binnie_process: sort error -- current refid [%d] was less than the last one [%d] at original read [%u] QNAME=[%s]"), refid, last_refid, read_count, br_get_qname(original_read));
 	    }
 	  
 	  /* 
@@ -279,7 +282,7 @@ bool binnie_process(int buffer_size, int max_buffer_bases, samFile *original_in_
 	  DLOG(gettext("binnie_process: checking that refid has not switched from unmapped back to mapped.  refid=[%d] last_refid=[%d]"), refid, last_refid);
 	  if ( (last_refid == -1) && (refid != -1) )
 	    {
-	      errx(BINNIE_EXIT_ERR_BAM_UNSORTED, gettext("binnie_process: sort error -- current refid [%d] was set but last refid was unmapped"), refid);
+	      errx(BINNIE_EXIT_ERR_BAM_UNSORTED, gettext("binnie_process: sort error -- current refid [%d] was set but last refid was unmapped at original read [%u] QNAME=[%s]"), refid, read_count, br_get_qname(original_read));
 	    }
 	  
 	  /* 
@@ -313,7 +316,7 @@ bool binnie_process(int buffer_size, int max_buffer_bases, samFile *original_in_
 	  DLOG(gettext("binnie_process: checking that pos has not decreased.  pos=[%d] last_pos=[%d]"), pos, last_pos);
 	  if ( (pos < last_pos) && (pos != -1) && (last_pos != -1) )
 	    {
-	      errx(BINNIE_EXIT_ERR_BAM_UNSORTED, gettext("binnie_process: sort error -- current pos [%d] was less than the last one [%d]"), pos, last_pos);
+	      errx(BINNIE_EXIT_ERR_BAM_UNSORTED, gettext("binnie_process: sort error -- current pos [%d] was less than the last one [%d] at original read [%u] QNAME=[%s]"), pos, last_pos, read_count, br_get_qname(original_read));
 	    }
 	  
 	  /* 
@@ -323,9 +326,9 @@ bool binnie_process(int buffer_size, int max_buffer_bases, samFile *original_in_
 	  DLOG(gettext("binnie_process: checking that pos has not switched from unmapped to mapped.  pos=[%d] last_pos=[%d]"), pos, last_pos);
 	  if ( (last_pos == -1) && (pos != -1) )
 	    {
-	      errx(BINNIE_EXIT_ERR_BAM_UNSORTED, gettext("binnie_process: sort error -- current pos [%d] was set but last pos was unmapped"), pos);
+	      errx(BINNIE_EXIT_ERR_BAM_UNSORTED, gettext("binnie_process: sort error -- current pos [%d] was set but last pos was unmapped at original read [%u] QNAME=[%s]"), pos, read_count, br_get_qname(original_read));
 	    }
-	  
+
 	  
 	  /* sort order now confirmed - set last_refid and last_pos for next iteration */
 	  DLOG(gettext("binnie_process: sort order confirmed. updating last_refid and last_pos from last_refid=[%d] last_pos=[%d]"), last_refid, last_pos);
@@ -389,7 +392,7 @@ bool binnie_process(int buffer_size, int max_buffer_bases, samFile *original_in_
 	    reads_output++;
             if (ret <= 0)
               {
-                errx(BINNIE_EXIT_ERR_WRITE, gettext("binnie_process: could not write to unchanged out file"));
+                err(BINNIE_EXIT_ERR_WRITE, gettext("binnie_process: could not write to unchanged out file"));
               }
             break;
           case BINNIE_BRIDGED:
@@ -398,7 +401,7 @@ bool binnie_process(int buffer_size, int max_buffer_bases, samFile *original_in_
 	    reads_output++;
             if (ret <= 0)
               {
-                errx(BINNIE_EXIT_ERR_WRITE, gettext("binnie_process: could not write to bridged out file"));
+                err(BINNIE_EXIT_ERR_WRITE, gettext("binnie_process: could not write to bridged out file"));
               }
             break;
           case BINNIE_REMAP:
@@ -407,11 +410,11 @@ bool binnie_process(int buffer_size, int max_buffer_bases, samFile *original_in_
 	    reads_output++;
             if (ret <= 0)
               {
-                errx(BINNIE_EXIT_ERR_WRITE, gettext("binnie_process: could not write to remap out file"));
+                err(BINNIE_EXIT_ERR_WRITE, gettext("binnie_process: could not write to remap out file"));
               }
             break;
           default:
-            errx(BINNIE_EXIT_ERR_INVALID_BIN, gettext("binnie_process: invalid bin [%d]"), bbr->bin);
+            errx(BINNIE_EXIT_ERR_INVALID_BIN, gettext("binnie_process: invalid bin [%d] for buffered read RG=[%s] QNAME=[%s]"), bbr->bin, br_get_read_group(bbr->br), br_get_qname(bbr->br));
           }
           
           /* remove the read from the buffer (this will call bbr_dispose for us) */
@@ -456,7 +459,7 @@ bool binnie_process(int buffer_size, int max_buffer_bases, samFile *original_in_
       br_dispose(current_bridge_read);
 
       /* FATAL ERROR */
-      errx(BINNIE_EXIT_ERR_ORIG_TRUNCATED, gettext("binnie_process: original finished but bridge read(s) remain"));
+      errx(BINNIE_EXIT_ERR_ORIG_TRUNCATED, gettext("binnie_process: original finished but bridge read(s) remain at bridge read [%u] QNAME=[%s]"), bridge_read_count, br_get_qname(current_bridge_read));
     }
 
 
@@ -466,7 +469,7 @@ bool binnie_process(int buffer_size, int max_buffer_bases, samFile *original_in_
   if (buffer_read_count > 0) 
     {
       /* FATAL ERROR */
-      errx(BINNIE_EXIT_ERR_BUFFER_NOT_EMPTY, gettext("output_buffer was not empty at end of binnie_process (%d reads remained)."), buffer_read_count);
+      errx(BINNIE_EXIT_ERR_BUFFER_NOT_EMPTY, gettext("output_buffer was not empty at end of binnie_process (%d reads remained in buffer)."), buffer_read_count);
     }
   
 
@@ -839,7 +842,7 @@ void binnie_read_buffer (binnie_binned_read_t *bbr, gl_list_t output_buffer)
       if (bbri->prev_mate != NULL)
         {
           /* ERROR: this should have been NULL at this point */
-          errx(BINNIE_EXIT_ERR_NOT_NULL, gettext("binnie_read_buffer: should have been at beginning of linked list, but bbri->prev_mate was not NULL (impossible!)"));
+          errx(BINNIE_EXIT_ERR_NOT_NULL, gettext("binnie_read_buffer: should have been at beginning of linked list, but bbri->prev_mate was not NULL (impossible!?)"));
         }
       
 
@@ -874,7 +877,7 @@ void binnie_read_buffer (binnie_binned_read_t *bbr, gl_list_t output_buffer)
       if (bbri->next_mate != NULL)
         {
           /* ERROR: this should have been NULL at this point */
-          errx(BINNIE_EXIT_ERR_NOT_NULL, gettext("binnie_read_buffer: should have been at end of linked list, but bbri->next_mate was not NULL (impossible!)"));
+          errx(BINNIE_EXIT_ERR_NOT_NULL, gettext("binnie_read_buffer: should have been at end of linked list, but bbri->next_mate was not NULL (impossible!?)"));
         }
       
 
@@ -922,7 +925,7 @@ int32_t br_get_refid (const binnie_read_t *br)
 
   refid = -1;
 
-  if ( !((br->bam_read)->core.flag & BAM_FUNMAP) )
+  if ( allow_sorted_unmapped || !((br->bam_read)->core.flag & BAM_FUNMAP) )
     {
       refid = (br->bam_read)->core.tid;
     }
@@ -949,7 +952,7 @@ int32_t br_get_pos (const binnie_read_t *br)
 
   pos = -1;
   
-  if ( !((br->bam_read)->core.flag & BAM_FUNMAP) )
+  if ( allow_sorted_unmapped || !((br->bam_read)->core.flag & BAM_FUNMAP) )
     {
       pos = (br->bam_read)->core.pos;
     }
@@ -1250,7 +1253,6 @@ bool br_equals(const binnie_read_t *br1, const binnie_read_t *br2)
   bool equal;
   DLOG("br_equals()");
   
-  DLOG("br_equals: ignore_rg=[%d] br1 rg=[%s] uid=[%s] br2 rg=[%s] uid=[%s]", ignore_rg, br_get_read_group(br1), br_get_uid_alloc(br1), br_get_read_group(br2), br_get_uid_alloc(br2));
   equal = ( (ignore_rg || (strcmp(br_get_read_group(br1), br_get_read_group(br2)) == 0))
             && (strcmp(br_get_qname(br1), br_get_qname(br2)) == 0) );
   
