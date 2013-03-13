@@ -38,11 +38,6 @@ AC_PROG_INSTALL
 # Checks for stdlib.h, stdarg.h , string.h and float.h, defines STDC_HEADERS on success
 AC_HEADER_STDC
 
-# Set VERSION
-# TODO: get this from git?
-VERSION="0.1"
-AC_SUBST(VERSION)
-
 # Bring in config headers
 AC_CONFIG_HEADERS([config.h])
 
