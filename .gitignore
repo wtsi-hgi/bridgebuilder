@@ -30,6 +30,7 @@ Makefile
 /*/config.h
 /*/*.tar.bz2
 /*/*.tar.gz
+/*/.version
 
 # Object files
 *.o
