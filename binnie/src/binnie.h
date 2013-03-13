@@ -22,6 +22,7 @@
 #ifndef BINNIE_H
 #define BINNIE_H
 
+
 /* gnulib headers */
 #include <stdbool.h>
 #include "size_max.h" /* to ensure SIZE_MAX is available */

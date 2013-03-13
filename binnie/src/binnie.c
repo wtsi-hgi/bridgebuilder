@@ -36,6 +36,7 @@
 #include "error.h"
 #include "progname.h"
 #include "xalloc.h"
+#include "version-etc.h"
 
 /* internationalisation */
 #include "gettext.h"
@@ -45,6 +46,9 @@
 #include "binnie_log.h"
 #include "binnie_files.h"
 #include "binnie_process.h"
+
+/* copyright notice for --version output (%s is symbol and %d is year) */
+const char version_etc_copyright[] = "Copyright %s %d Genome Research Limited";
 
 /* max size of output buffer (in number of reads or 0 for unlimited) */
 unsigned int buffer_size;
@@ -104,6 +108,7 @@ void print_help()
 #ifdef DEBUG
   fprintf(stderr, gettext("  -d, --debug                  Print debugging messages to stderr (also sets -v 3)\n"));
 #endif
+  fprintf(stderr, gettext("  -V, --version                Print version information to stdout and exit\n"));
 }
 
 /* 
@@ -160,11 +165,12 @@ int main(int argc, char **argv)
 #ifdef DEBUG
 	  {"debug",			no_argument,		0,	'd'},
 #endif
+ 	  {"version",           	no_argument,		0,	'V'},
 	  {0, 0, 0, 0}
 	};
       option_index = 0;
       
-      c = getopt_long(argc, argv, "u:b:r:s:m:ihvd", binnie_options, &option_index);
+      c = getopt_long(argc, argv, "u:b:r:s:m:ihvdV", binnie_options, &option_index);
 
       if (c < 0)
 	break;
@@ -178,21 +184,6 @@ int main(int argc, char **argv)
 	    else 
 	      verbosity++;
 	  }
-	  break;
-	case 'v': 
-	  verbosity++;
-	  break;
-#ifdef DEBUG
-	case 'd':
-	  debug_flag = true;
-	  break;
-#endif
-	case 'i':
-	  ignore_rg = true;
-	  break;
-	case 'h':
-	  print_help();
-	  exit(BINNIE_EXIT_SUCCESS);
 	  break;
 	case 's':
 	  buffer_size = atoi(optarg);
@@ -208,6 +199,25 @@ int main(int argc, char **argv)
 	  break;
 	case 'r':
 	  remap_out_file = xstrdup(optarg);
+	  break;
+	case 'i':
+	  ignore_rg = true;
+	  break;
+	case 'h':
+	  print_help();
+	  exit(BINNIE_EXIT_SUCCESS);
+	  break;
+	case 'v': 
+	  verbosity++;
+	  break;
+#ifdef DEBUG
+	case 'd':
+	  debug_flag = true;
+	  break;
+#endif
+	case 'V':
+	  version_etc(stdout, NULL, PACKAGE_NAME, PACKAGE_VERSION, "Joshua C. Randall", (char *) 0);
+	  exit(BINNIE_EXIT_SUCCESS);
 	  break;
 	case '?':
 	  /* getopt_long will have already printed an error */
@@ -249,7 +259,7 @@ int main(int argc, char **argv)
   /* get remaining command-line arguments (original and bridge input file names) */
   if (optind + 2 != argc) {
     print_usage();
-    err(BINNIE_EXIT_ERR_ARGS, gettext("two filenames should be given as arguments following the options"));
+    errx(BINNIE_EXIT_ERR_ARGS, gettext("two filenames should be given as arguments following the options"));
   } else {
     original_in_file = xstrdup(argv[optind++]);
     blog(3, gettext("original_in_file set to %s"), original_in_file);
