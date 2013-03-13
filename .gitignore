@@ -28,6 +28,8 @@ Makefile
 /*/test/vars
 /*/config.h.in
 /*/config.h
+/*/*.tar.bz2
+/*/*.tar.gz
 
 # Object files
 *.o
