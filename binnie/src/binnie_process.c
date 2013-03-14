@@ -168,8 +168,6 @@ bool binnie_process(int buffer_size, int max_buffer_bases, samFile *original_in_
       int32_t pos;
       int32_t reads_output;
 
-      DLOG(gettext("binnie_process: processing read [%d]"), read_count);
-
       DLOG(gettext("binnie_process: initializing original_read"));
       original_read = br_init();
 
@@ -185,6 +183,8 @@ bool binnie_process(int buffer_size, int max_buffer_bases, samFile *original_in_
 	  /* increment read_count */
 	  read_count++;
       
+	  DLOG(gettext("binnie_process: processing read [%d]"), read_count);
+
 	  /* get refid and pos from original */
 	  refid = br_get_refid(original_read);
 	  pos = br_get_pos(original_read);
