@@ -48,7 +48,7 @@ bool allow_sorted_unmapped;
 
 
 /* hash parameters */
-#define BINNIE_TABLESIZE SIZE_MAX
+#define BINNIE_TABLESIZE 4294967296 // 2^32
 
 
 /* output bins */
