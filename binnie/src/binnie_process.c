@@ -395,7 +395,7 @@ bool binnie_process(int buffer_size, int max_buffer_bases, samFile *original_in_
 	  /* check expected_mate_count and mate_count */
 	  if (bbr->expected_mate_count < 0)
 	    {
-	      blog(1, gettext("expected mate count unknown, setting bin to REMAP for read rg=[%s] qname=[%s] (was destined for bin [%s])"), br_get_read_group(bbr->br), br_get_qname(bbr->br), bbr_get_bin_name(bbr));
+	      blog(2, gettext("expected mate count unknown, setting bin to REMAP for read rg=[%s] qname=[%s] (was destined for bin [%s])"), br_get_read_group(bbr->br), br_get_qname(bbr->br), bbr_get_bin_name(bbr));
 	      bbr->bin = BINNIE_REMAP;
 	    }
 	  else if (bbr->mate_count < bbr->expected_mate_count)
@@ -872,9 +872,12 @@ void binnie_read_buffer (binnie_binned_read_t *bbr, gl_list_t output_buffer)
       all_bins_agree = true;
       do
         {
-          /* increment mate_count to account for the new read for this template */
+          /* increment buffered read mate_count to account for the new read for this template */
           bbri->mate_count++;
-          
+	  
+	  /* increment new read mate_count to acount for this buffered read */
+	  bbr->mate_count++;
+
           /* check if the buffered read has an unknown expected mate count */
           if (bbri->expected_mate_count < 0)
             {
@@ -1266,6 +1269,10 @@ char *br_get_qname (const binnie_read_t *br)
  * br_equals
  * ------------------
  *
+ * Checks if two binnie_read_t structures refer to the same read by 
+ * comparing their read_group and qname (or just the qname if ignore_rg
+ * is set)
+ *
  * INPUT: pointers to two binnie_read_t reads to be compared
  * OUTPUT: bool (true if equal, false if not equal)
  *
@@ -1423,8 +1430,9 @@ static bool bbr_equals(const void *elt1, const void *elt2)
   bbr1 = elt1;
   bbr2 = elt2;
   
-  equal = ( br_equals(bbr1->br, bbr2->br) ); 
-
+  equal = ( (strcmp(br_get_read_group(bbr1->br), br_get_read_group(bbr2->br)) == 0)
+            && (strcmp(br_get_qname(bbr1->br), br_get_qname(bbr2->br)) == 0) );
+  
   DLOG("bbr_equals: returning [%d]", equal);
   return equal;
 }
