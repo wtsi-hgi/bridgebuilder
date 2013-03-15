@@ -105,6 +105,7 @@ bool binnie_process(int buffer_size, int max_buffer_bases, samFile *original_in_
   uint32_t read_count;
   uint32_t bridge_read_count;
   bool new_refid;
+  bool first_read;
   int buffer_read_count;
   int buffer_read_count_max;
 
@@ -116,7 +117,8 @@ bool binnie_process(int buffer_size, int max_buffer_bases, samFile *original_in_
   buffer_last_pos = 0;
   original_done = false;
   bridge_done = false;
-  new_refid = true;
+  new_refid = false;
+  first_read = true;
   buffer_read_count = 0;
   buffer_read_count_max = 0;
 
@@ -147,7 +149,7 @@ bool binnie_process(int buffer_size, int max_buffer_bases, samFile *original_in_
                                        bbr_equals, 
                                        bbr_hashcode, 
                                        bbr_dispose, 
-                                       false);
+                                       true);
   
   
   /* Allocate/initialize BAM/SAM read buffers. */
@@ -168,8 +170,6 @@ bool binnie_process(int buffer_size, int max_buffer_bases, samFile *original_in_
       int32_t pos;
       int32_t reads_output;
 
-      DLOG(gettext("binnie_process: processing read [%d]"), read_count);
-
       DLOG(gettext("binnie_process: initializing original_read"));
       original_read = br_init();
 
@@ -185,6 +185,8 @@ bool binnie_process(int buffer_size, int max_buffer_bases, samFile *original_in_
 	  /* increment read_count */
 	  read_count++;
       
+	  DLOG(gettext("binnie_process: processing read [%d]"), read_count);
+
 	  /* get refid and pos from original */
 	  refid = br_get_refid(original_read);
 	  pos = br_get_pos(original_read);
@@ -202,13 +204,15 @@ bool binnie_process(int buffer_size, int max_buffer_bases, samFile *original_in_
           errx(BINNIE_EXIT_ERR_READ_ORIG, gettext("binnie_process: error reading from original input file at read [%u]"), read_count);
         }
 
-      if (new_refid)
+      if (new_refid || first_read)
 	{
 	  if (refid >= 0)
 	    blog(1, gettext("processing original reads mapped to reference [%s]"), original_header->target_name[refid]);
 	  else 
 	    blog(1, gettext("processing original unmapped reads"));
 	    
+	  if (first_read)
+	    first_read = false;
 	}
       
       DLOG(gettext("binnie_process: have original read at refid=[%d] pos=[%d]"), refid, pos);
@@ -289,8 +293,8 @@ bool binnie_process(int buffer_size, int max_buffer_bases, samFile *original_in_
 	   * if refid has changed, set new_refid flag and 
 	   * reset last_pos to 0 (or to -1 if we've changed to unmapped)
 	   */
-	  DLOG(gettext("binnie_process: checking if refid has changed.  refid=[%d] last_refid=[%d]"), refid, last_refid);
-	  if (refid != last_refid)
+	  DLOG(gettext("binnie_process: checking if refid has changed.  refid=[%d] last_refid=[%d] read_count=[%u]"), refid, last_refid, read_count);
+	  if (refid != last_refid && read_count > 1)
 	    {
 	      blog(2, gettext("reference id now [%d]"), refid);
 	      DLOG(gettext("have new refid.  refid=[%d] last_refid=[%d]"), refid, last_refid);
@@ -338,9 +342,10 @@ bool binnie_process(int buffer_size, int max_buffer_bases, samFile *original_in_
 	  
 	  
 	  /* add read to buffer, update mates in buffer, etc */
-	  DLOG(gettext("binnie_process: calling binnie_read_buffer"));
+	  DLOG(gettext("binnie_process: calling binnie_read_buffer with output_buffer with [%d] entries for bbr with rg=[%s] qname=[%s]"), gl_list_size(output_buffer), br_get_read_group(bbr->br), br_get_qname(bbr->br));
 	  binnie_read_buffer(bbr, output_buffer);
-	  
+	  DLOG(gettext("binnie_process: after binnie_read_buffer, output_buffer has [%d] entries"), gl_list_size(output_buffer));
+
 	  /* update buffer_last_pos */
 	  DLOG(gettext("binnie_process: updating buffer_last_pos from buffer_last_pos=[%d]"), buffer_last_pos);
 	  buffer_last_pos = bbr->original_pos;
@@ -383,6 +388,22 @@ bool binnie_process(int buffer_size, int max_buffer_bases, samFile *original_in_
 	  DLOG("binnie_process: calling gl_list_get_at 0");
           bbr = (binnie_binned_read_t *) gl_list_get_at(output_buffer, 0);
           
+	  
+          DLOG("binnie_process: have binned read with mate_count=[%d] expected_mate_count=[%d] bin=[%s]", bbr->mate_count, bbr->expected_mate_count, bbr_get_bin_name(bbr));
+	  
+
+	  /* check expected_mate_count and mate_count */
+	  if (bbr->expected_mate_count < 0)
+	    {
+	      blog(2, gettext("expected mate count unknown, setting bin to REMAP for read rg=[%s] qname=[%s] (was destined for bin [%s])"), br_get_read_group(bbr->br), br_get_qname(bbr->br), bbr_get_bin_name(bbr));
+	      bbr->bin = BINNIE_REMAP;
+	    }
+	  else if (bbr->mate_count < bbr->expected_mate_count)
+	    {
+	      blog(5, gettext("mate count [%d] less than expected mate count [%d], setting bin to REMAP for read rg=[%s] qname=[%s] (was destined for bin [%s])"), bbr->mate_count, bbr->expected_mate_count, br_get_read_group(bbr->br), br_get_qname(bbr->br), bbr_get_bin_name(bbr));
+	      bbr->bin = BINNIE_REMAP;
+	    }
+	  
 
           /* write the read to the designated output bin */
           switch (bbr->bin) {
@@ -392,7 +413,7 @@ bool binnie_process(int buffer_size, int max_buffer_bases, samFile *original_in_
 	    reads_output++;
             if (ret <= 0)
               {
-                err(BINNIE_EXIT_ERR_WRITE, gettext("binnie_process: could not write to unchanged out file"));
+                err(BINNIE_EXIT_ERR_WRITE, gettext("binnie_process: could not write to UNCHANGED bin out file"));
               }
             break;
           case BINNIE_BRIDGED:
@@ -401,7 +422,7 @@ bool binnie_process(int buffer_size, int max_buffer_bases, samFile *original_in_
 	    reads_output++;
             if (ret <= 0)
               {
-                err(BINNIE_EXIT_ERR_WRITE, gettext("binnie_process: could not write to bridged out file"));
+                err(BINNIE_EXIT_ERR_WRITE, gettext("binnie_process: could not write to BRIDGED bin out file"));
               }
             break;
           case BINNIE_REMAP:
@@ -410,7 +431,7 @@ bool binnie_process(int buffer_size, int max_buffer_bases, samFile *original_in_
 	    reads_output++;
             if (ret <= 0)
               {
-                err(BINNIE_EXIT_ERR_WRITE, gettext("binnie_process: could not write to remap out file"));
+                err(BINNIE_EXIT_ERR_WRITE, gettext("binnie_process: could not write to REMAP bin out file"));
               }
             break;
           default:
@@ -720,21 +741,21 @@ void fixup_bridge_from_original (binnie_read_t *bridge_read, binnie_read_t *orig
        && !(bridge_read->bam_read->core.flag & BAM_FPAIRED) )
     {
       bridge_read->bam_read->core.flag = bridge_read->bam_read->core.flag | BAM_FPAIRED;
-      blog(4, gettext("set bridge read flag FPAIRED. flag=[%d]"), bridge_read->bam_read->core.flag);
+      blog(9, gettext("set bridge read flag FPAIRED. flag=[%d]"), bridge_read->bam_read->core.flag);
     }
 
   DLOG(gettext("fixup_bridge_from_original: checking if we need to override bridge_read FREAD1 flag. original_read flag=[%d] bridge_read flag=[%d]"), original_read->bam_read->core.flag, bridge_read->bam_read->core.flag);
   if (original_read->bam_read->core.flag & BAM_FREAD1)
     {
       bridge_read->bam_read->core.flag = bridge_read->bam_read->core.flag | BAM_FREAD1;
-      blog(4, gettext("set bridge read flag FREAD1. flag=[%d]"), bridge_read->bam_read->core.flag);
+      blog(9, gettext("set bridge read flag FREAD1. flag=[%d]"), bridge_read->bam_read->core.flag);
     }	      
 
   DLOG(gettext("fixup_bridge_from_original: checking if we need to override bridge_read FREAD2 flag. original_read flag=[%d] bridge_read flag=[%d]"), original_read->bam_read->core.flag, bridge_read->bam_read->core.flag);
   if (original_read->bam_read->core.flag & BAM_FREAD2)
     {
       bridge_read->bam_read->core.flag = bridge_read->bam_read->core.flag | BAM_FREAD2;
-      blog(4, gettext("set bridge read flag FREAD2. flag=[%d]"), bridge_read->bam_read->core.flag);
+      blog(9, gettext("set bridge read flag FREAD2. flag=[%d]"), bridge_read->bam_read->core.flag);
     }	 
 
   DLOG(gettext("fixup_bridge_from_original: checking if we need to override bridge_read FI tag."));
@@ -752,7 +773,7 @@ void fixup_bridge_from_original (binnie_read_t *bridge_read, binnie_read_t *orig
       /* add original FI tag to bridge */
       bam_aux_append(bridge_read->bam_read, "FI", 'i', bam_aux_type2size('i'), original_tag);
 
-      blog(4, gettext("set bridge read tag FI=[%d]"), bam_aux2i(bam_aux_get(bridge_read->bam_read, "FI")));
+      blog(9, gettext("set bridge read tag FI=[%d]"), bam_aux2i(bam_aux_get(bridge_read->bam_read, "FI")));
     }
 
   /* only fixup RG if we are ignoring RG in matching, otherwise we already know they are the same */
@@ -780,7 +801,7 @@ void fixup_bridge_from_original (binnie_read_t *bridge_read, binnie_read_t *orig
 	  /* add original RG tag to bridge */
 	  bam_aux_append(bridge_read->bam_read, "RG", 'Z', rg_len+1, (uint8_t*)rg);
 	  
-	  blog(4, gettext("set bridge read tag RG=[%s]"), bam_aux2Z(bam_aux_get(bridge_read->bam_read, "RG")));
+	  blog(9, gettext("set bridge read tag RG=[%s]"), bam_aux2Z(bam_aux_get(bridge_read->bam_read, "RG")));
 	}
     }
 
@@ -810,13 +831,14 @@ void binnie_read_buffer (binnie_binned_read_t *bbr, gl_list_t output_buffer)
   DLOG("binnie_read_buffer()");
 
   /* search for a node like this one */
-  DLOG("binnie_read_buffer: calling gl_list_search");
+  DLOG("binnie_read_buffer: calling gl_list_search searching buffer with [%d] entries for bbr with rg=[%s] qname=[%s]", gl_list_size(output_buffer), br_get_read_group(bbr->br), br_get_qname(bbr->br));
   node = gl_list_search(output_buffer, bbr);
   if (node == NULL) 
     {
       /* this will be the first node for this template in the buffer, just add it */
       DLOG("binnie_read_buffer: node not found, calling gl_list_add_last");
       gl_list_add_last(output_buffer, bbr);
+      DLOG("binnie_read_buffer: after adding node, output_buffer has [%d] entries", gl_list_size(output_buffer));
     }
   else /* node != NULL */
     {
@@ -850,9 +872,12 @@ void binnie_read_buffer (binnie_binned_read_t *bbr, gl_list_t output_buffer)
       all_bins_agree = true;
       do
         {
-          /* increment mate_count to account for the new read for this template */
+          /* increment buffered read mate_count to account for the new read for this template */
           bbri->mate_count++;
-          
+	  
+	  /* increment new read mate_count to acount for this buffered read */
+	  bbr->mate_count++;
+
           /* check if the buffered read has an unknown expected mate count */
           if (bbri->expected_mate_count < 0)
             {
@@ -886,7 +911,7 @@ void binnie_read_buffer (binnie_binned_read_t *bbr, gl_list_t output_buffer)
       bbr->prev_mate = bbri;
       DLOG("binnie_read_buffer: calling gl_list_add_last");
       gl_list_add_last(output_buffer, bbr);
-      
+      DLOG("binnie_read_buffer: after adding node, output_buffer has [%d] entries", gl_list_size(output_buffer));
 
       /* if all bins did not agree, we need to set them all to remap */
       if (!all_bins_agree)
@@ -904,7 +929,7 @@ void binnie_read_buffer (binnie_binned_read_t *bbr, gl_list_t output_buffer)
       
     } /* node != NULL */
 
-  DLOG("binnie_read_buffer: returning void");
+  DLOG("binnie_read_buffer: returning (void)");
 } /* binnie_read_buffer */
 
 
@@ -1244,6 +1269,10 @@ char *br_get_qname (const binnie_read_t *br)
  * br_equals
  * ------------------
  *
+ * Checks if two binnie_read_t structures refer to the same read by 
+ * comparing their read_group and qname (or just the qname if ignore_rg
+ * is set)
+ *
  * INPUT: pointers to two binnie_read_t reads to be compared
  * OUTPUT: bool (true if equal, false if not equal)
  *
@@ -1352,6 +1381,38 @@ binnie_read_t *br_init()
 
 
 /*
+ * bbr_get_bin_name
+ * -------------------
+ *
+ * INPUT: pointer to binnie_binned_read_t read to return a string bin name for
+ * OUTPUT: string (char *) representing name of bin or "UNKNOWN" if not a valid bin
+ *
+ */
+char *bbr_get_bin_name(binnie_binned_read_t *bbr)
+{
+  char *bin_name;
+  DLOG("bbr_get_bin_name()");
+
+  bin_name = "UNKNOWN";
+
+  switch (bbr->bin) {
+  case BINNIE_UNCHANGED:
+    bin_name = "UNCHANGED";
+    break;
+  case BINNIE_BRIDGED:
+    bin_name = "BRIDGED";
+    break;
+  case BINNIE_REMAP:
+    bin_name = "REMAP";
+    break;
+  }
+  
+  DLOG("bbr_get_bin_name: returning bin_name=[%s]", bin_name);
+  return bin_name;
+}
+
+
+/*
  * bbr_equals
  * ------------------
  *
@@ -1369,8 +1430,9 @@ static bool bbr_equals(const void *elt1, const void *elt2)
   bbr1 = elt1;
   bbr2 = elt2;
   
-  equal = ( br_equals(bbr1->br, bbr2->br) ); 
-
+  equal = ( (strcmp(br_get_read_group(bbr1->br), br_get_read_group(bbr2->br)) == 0)
+            && (strcmp(br_get_qname(bbr1->br), br_get_qname(bbr2->br)) == 0) );
+  
   DLOG("bbr_equals: returning [%d]", equal);
   return equal;
 }
@@ -1395,11 +1457,13 @@ size_t bbr_hashcode(const void *elt)
 
   /* get uid */
   uid = br_get_uid_alloc(bbr->br);
+  DLOG("bbr_hashcode: calling hash_pjw on uid=[%s]", uid);
   hashcode = hash_pjw(uid, BINNIE_TABLESIZE);
-  DLOG("bbr_hashcode: have hashcode=[%d] for uid=[%s] tablesize=[%z]", hashcode, uid, BINNIE_TABLESIZE);
+  
+  DLOG("bbr_hashcode: have hashcode=[%zu] for uid=[%s] tablesize=[%zu]", hashcode, uid, BINNIE_TABLESIZE);
   free((void *)uid);
   
-  DLOG("bbr_hashcode: returning hashcode=[%z]", hashcode);
+  DLOG("bbr_hashcode: returning hashcode=[%zu]", hashcode);
   return hashcode;
 }
 
@@ -1456,5 +1520,6 @@ binnie_binned_read_t *bbr_init(binnie_read_t *br)
   DLOG("bbr_init: returning bbr");
   return bbr;
 }
+
 
 

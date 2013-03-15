@@ -85,6 +85,8 @@ void br_dispose(const binnie_read_t *br);
 
 binnie_read_t *br_init();
 
+char *bbr_get_bin_name(binnie_binned_read_t *bbr);
+
 static bool bbr_equals(const void *elt1, const void *elt2);
 
 size_t bbr_hashcode(const void *elt);
