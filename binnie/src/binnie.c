@@ -249,22 +249,22 @@ int main(int argc, char **argv)
 
   if (ignore_rg)
     {
-      blog(0, gettext("ignoring read group (RG) when matching original and bridge-mapped reads"));
+      blog(1, gettext("ignoring read group (RG) when matching original and bridge-mapped reads"));
     }
 
   if (allow_sorted_unmapped)
     {
-      blog(0, gettext("allowing reads with 0x4 flag set to be sorted according to their refid and pos"));
+      blog(1, gettext("allowing reads with 0x4 flag set to be sorted according to their refid and pos"));
     }
 
   if (buffer_size > 0)
     {
-      blog(0, gettext("buffer size set to %d reads"), buffer_size);
+      blog(1, gettext("buffer size set to %d reads"), buffer_size);
     }
 
   if (max_buffer_bases > 0)
     {
-      blog(0, gettext("max buffer bases set to %d bases"), max_buffer_bases);
+      blog(1, gettext("max buffer bases set to %d bases"), max_buffer_bases);
     }
 
   /* get remaining command-line arguments (original and bridge input file names) */
@@ -291,9 +291,9 @@ int main(int argc, char **argv)
     }
   else 
     {
-      blog(0, gettext("input files opened"));
-      blog(1, gettext("\toriginal=[%s]"), original_in_fp->fn);
-      blog(1, gettext("\tbridge=[%s]"), bridge_in_fp->fn);
+      blog(1, gettext("input files opened"));
+      blog(2, gettext("\toriginal=[%s]"), original_in_fp->fn);
+      blog(2, gettext("\tbridge=[%s]"), bridge_in_fp->fn);
     }
 
   /* name output files after input if they aren't specified */
@@ -338,10 +338,10 @@ int main(int argc, char **argv)
     }
   else 
     {
-      blog(0, gettext("output files opened"));
-      blog(1, gettext("\tunchanged=[%s]"), unchanged_out_fp->fn);
-      blog(1, gettext("\tbridged=[%s]"), bridged_out_fp->fn);
-      blog(1, gettext("\tremap=[%s]"), remap_out_fp->fn);
+      blog(1, gettext("output files opened"));
+      blog(2, gettext("\tunchanged=[%s]"), unchanged_out_fp->fn);
+      blog(2, gettext("\tbridged=[%s]"), bridged_out_fp->fn);
+      blog(2, gettext("\tremap=[%s]"), remap_out_fp->fn);
     }
 
 

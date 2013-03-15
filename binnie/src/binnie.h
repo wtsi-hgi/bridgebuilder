@@ -43,12 +43,12 @@ bool allow_sorted_unmapped;
 
 
 /* option defaults */
-#define BINNIE_DEFAULT_BUFFER_SIZE  1000000
-#define BINNIE_DEFAULT_BUFFER_BASES 10000
+#define BINNIE_DEFAULT_BUFFER_SIZE  100000
+#define BINNIE_DEFAULT_BUFFER_BASES 1000
 
 
 /* hash parameters */
-#define BINNIE_TABLESIZE SIZE_MAX
+#define BINNIE_TABLESIZE 4294967296 // 2^32
 
 
 /* output bins */
