@@ -12,7 +12,7 @@ The [BridgeBuilder System] [1] consists of several components, including [Baker]
 Note: The usage of a range of years within a copyright statement contained within this distribution should be interpreted as being equivalent to a list of years including the first and last year specified and all consecutive years between them. For example, a copyright statement that reads 'Copyright (c) 2005, 2007- 2009, 2011-2012' should be interpreted as being identical to a statement that reads 'Copyright (c) 2005, 2007, 2008, 2009, 2011, 2012' and a copyright statement that reads "Copyright (c) 2005-2012' should be interpreted as being identical to a statement that reads 'Copyright (c) 2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012'."
 
 
-[1]: docs/BridgeBuilderSystemDiagram.png           "BridgeBuilder System Diagram"
+[1]: docs/bridge_builder_v1.png           "BridgeBuilder System Diagram"
 [2]: baker/README.md                               "Baker"
 [3]: binnie/README.md                              "Binnie"
 [4]: brunel/README.md                              "Brunel"
