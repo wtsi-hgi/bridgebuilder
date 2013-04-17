@@ -37,7 +37,7 @@ struct state {
     size_t input_count;
     samFile** input_file;
     bam_hdr_t** input_header;
-    int** input_trans;
+    int32_t** input_trans;
     samFile* output_file;
     bam_hdr_t* output_header;
 };
@@ -179,6 +179,7 @@ state_t* init(parsed_opts_t* opts) {
     retval->input_count = opts->input_count;
     
     // Open files
+    retval->input_trans = (int**)calloc(opts->input_count, sizeof(int*));
     retval->input_file = (samFile**)calloc(opts->input_count, sizeof(samFile*));
     retval->input_header = (bam_hdr_t**)calloc(opts->input_count, sizeof(bam_hdr_t*));
     if (!retval->input_file || !retval->input_header) {
@@ -196,6 +197,10 @@ state_t* init(parsed_opts_t* opts) {
         if (opts->input_trans_name[i] != NULL)
         {
             retval->input_trans[i] = build_translation_file(opts->input_trans_name[i], retval->input_header[i], retval->output_header);
+        }
+        else
+        {
+            retval->input_trans[i] = build_translation(retval->input_header[i], retval->output_header);
         }
     }
 
@@ -232,24 +237,30 @@ bool merge(state_t* opts) {
     
     bam1_t** file_read = calloc(opts->input_count, sizeof(bam1_t*));
     size_t files_to_merge = opts->input_count;
+    // initialise the first read for each input file
     for (size_t i = 0; i < opts->input_count; i++) {
-        file_read[i] = bam_init1();  // initialise the read for each
-        // Read the first record for each
+        file_read[i] = bam_init1();  
+        // Read the first record
         if (sam_read1(opts->input_file[i], opts->input_header[i], file_read[i]) < 0) {
             // Nothing more to read?  Ignore this file
             bam_destroy1(file_read[i]);
             file_read[i] = NULL;
             files_to_merge--;
+        } else {
+            if (opts->input_trans[i]) {
+                // Translate the tid and mate tid but only if they're not null values
+                if (file_read[i]->core.tid != -1) {
+                    file_read[i]->core.tid = opts->input_trans[i][file_read[i]->core.tid];
+                }
+                if (file_read[i]->core.mtid != -1) {
+                    file_read[i]->core.mtid = opts->input_trans[i][file_read[i]->core.mtid];
+                }
+            }
         }
     }
 
     while (files_to_merge > 0) {
         size_t i = selectRead(file_read, opts->input_count);
-        if (opts->input_trans[i]) {
-            // Translate the tid and mate tid
-            file_read[i]->core.tid = opts->input_trans[i][file_read[i]->core.tid];
-            file_read[i]->core.mtid = opts->input_trans[i][file_read[i]->core.mtid];
-        }
         // Write the read out and replace it with the next one to process
         sam_write1(opts->output_file, opts->output_header, file_read[i]);
         if (sam_read1(opts->input_file[i], opts->input_header[i], file_read[i]) < 0) {
@@ -257,6 +268,16 @@ bool merge(state_t* opts) {
             bam_destroy1(file_read[i]);
             file_read[i] = NULL;
             files_to_merge--;
+        } else {
+            if (opts->input_trans[i]) {
+                // Translate the tid and mate tid but only if they're not null values
+                if (file_read[i]->core.tid != -1) {
+                    file_read[i]->core.tid = opts->input_trans[i][file_read[i]->core.tid];
+                }
+                if (file_read[i]->core.mtid != -1) {
+                    file_read[i]->core.mtid = opts->input_trans[i][file_read[i]->core.mtid];
+                }
+            }
         }
     }
 
