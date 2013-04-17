@@ -24,8 +24,10 @@
 #include <unistd.h>
 
 struct parsed_opts {
+    char* output_header_name;
     size_t input_count;
     char** input_name;
+    char** input_trans_name;
     char* output_name;
 };
 
@@ -48,23 +50,106 @@ void cleanup_opts(parsed_opts_t* opts);
 
 parsed_opts_t* parse_args(int argc, char** argv) {
     if (argc < 3) {
-        dprintf(STDERR_FILENO, "Arguments should be: merge <input1.bam> <input2.bam> [<inputX.bam> ...] <output.bam>\r\n");
+        dprintf(STDERR_FILENO, "Arguments should be: brunel <newheader.sam> <input1.bam[:trans_tbl.txt]> <input2.bam[:trans_tbl.txt]> [<inputX.bam[:trans_tbl.txt]> ...] <output.bam>\r\n");
         return NULL;
     }
     
     parsed_opts_t* retval = malloc(sizeof(parsed_opts_t));
     if (! retval ) return NULL;
+    
+    retval->output_header_name = strdup(argv[1]);
 
-    retval->input_count = argc-2;
+    retval->input_count = argc-3;
     retval->input_name = (char**)calloc(retval->input_count,sizeof(char*));
+    retval->input_trans_name = (char**)calloc(retval->input_count,sizeof(char*));
     size_t i = 0;
     for (; i < retval->input_count; i++) {
-        retval->input_name[i] = strdup(argv[i+1]);
+        char* temp = strdup(argv[i+2]);
+        char* sep = temp;
+        retval->input_name[i] = strsep(&sep, ":");
+        retval->input_trans_name[i] = sep;
     }
 
-    retval->output_name = strdup(argv[i+1]);
+    retval->output_name = strdup(argv[i+2]);
 
     return retval;
+}
+
+int* build_translation_file(const char* trans_name, bam_hdr_t* file_header, bam_hdr_t* replace_header) {
+    FILE* trans_file = fopen(trans_name, "r");
+    
+    int file_entries = file_header->n_targets;
+    int replace_entries = replace_header->n_targets;
+    
+    int *trans = malloc(sizeof(int)*file_entries);
+    
+    char* linepointer = NULL;
+    size_t read = 0;
+    
+    int counter = file_entries;
+    
+    while (!feof(trans_file) && !ferror(trans_file) && counter > 0) {
+        getline(&linepointer, &read, trans_file);
+        
+        char* sep = linepointer;
+        strsep(&sep, "\t");
+        if (sep == NULL) break;
+        char* two = sep;
+        strsep(&two, "\t\n");
+
+        // lookup tid of original and replacement
+        int i = 0;
+        for ( ; i < file_entries; i++ ) {
+            char* item = file_header->target_name[i];
+            if (!strcmp(item,linepointer)) { break; }
+        }
+        int j = 0;
+        for ( ; j < replace_entries; j++ ) {
+            char* item = replace_header->target_name[j];
+            if (!strcmp(item,sep)) { break; }
+        }
+        
+        trans[i] = j;
+        counter--;
+    }
+    free(linepointer);
+    
+    fclose(trans_file);
+    return trans;
+}
+
+int* build_translation( bam_hdr_t* file_header, bam_hdr_t* replace_header ) {
+    int file_entries = file_header->n_targets;
+    int replace_entries = replace_header->n_targets;
+    
+    int *trans = malloc(sizeof(int)*file_entries);
+    bool exact_match = true;
+    for (int i = 0; i < file_entries; i++) {
+        if (!strcmp(file_header->target_name[i], replace_header->target_name[i])) {
+            trans[i] = i;
+        } else {
+            exact_match = false;
+            bool error = true;
+            for (int j = 0; j < replace_entries; j++) {
+                if (!strcmp(file_header->target_name[i], replace_header->target_name[j])) {
+                    trans[i] = j;
+                    error = false;
+                    break;
+                }
+            }
+            if (error) {
+                dprintf(STDERR_FILENO, "Translation table required.");
+                exit(-1);
+            }
+        }
+    }
+
+    if (!exact_match) {
+        return trans;
+    } else {
+        free(trans);
+        return NULL;
+    }
 }
 
 state_t* init(parsed_opts_t* opts) {
@@ -73,26 +158,16 @@ state_t* init(parsed_opts_t* opts) {
         dprintf(STDERR_FILENO, "Out of memory");
         return NULL;
     }
-    
-    retval->input_count = opts->input_count;
-    
-    // Open files
-    retval->input_file = (samFile**)calloc(opts->input_count, sizeof(samFile*));
-    retval->input_header = (bam_hdr_t**)calloc(opts->input_count, sizeof(bam_hdr_t*));
-    for (size_t i = 0; i < opts->input_count; i++) {
-        retval->input_file[i] = sam_open(opts->input_name[i], "rb", 0);
-        if (retval->input_file[i] == NULL) {
-            dprintf(STDERR_FILENO, "Could not open input file: %s\r\n", opts->input_name[i]);
-            return NULL;
-        }
-        retval->input_header[i] = sam_hdr_read(retval->input_file[i]);
-    }
-    
-    // TODO: merge headers instead of just taking first one
-    // TODO: create SQ translation table
-    // TODO: create RG translation table
-    retval->output_header = retval->input_header[0];
 
+    // TODO: add option to merge headers instead of just asking for one
+    // TODO: create RG translation table
+    samFile* hdr_load = sam_open(opts->output_header_name, "r", 0);
+    if (!hdr_load) {
+        dprintf(STDERR_FILENO, "Could not open header file");
+        return NULL;
+    }
+    retval->output_header = sam_hdr_read(hdr_load);
+    sam_close(hdr_load);
     retval->output_file = sam_open(opts->output_name, "wb", 0);
     
     if (retval->output_file == NULL) {
@@ -100,7 +175,30 @@ state_t* init(parsed_opts_t* opts) {
         cleanup_state(retval);
         return NULL;
     }
+
+    retval->input_count = opts->input_count;
     
+    // Open files
+    retval->input_file = (samFile**)calloc(opts->input_count, sizeof(samFile*));
+    retval->input_header = (bam_hdr_t**)calloc(opts->input_count, sizeof(bam_hdr_t*));
+    if (!retval->input_file || !retval->input_header) {
+        dprintf(STDERR_FILENO, "Out of memory");
+        free(retval);
+        return NULL;
+    }
+    for (size_t i = 0; i < opts->input_count; i++) {
+        retval->input_file[i] = sam_open(opts->input_name[i], "rb", 0);
+        if (retval->input_file[i] == NULL) {
+            dprintf(STDERR_FILENO, "Could not open input file: %s\r\n", opts->input_name[i]);
+            return NULL;
+        }
+        retval->input_header[i] = sam_hdr_read(retval->input_file[i]);
+        if (opts->input_trans_name[i] != NULL)
+        {
+            retval->input_trans[i] = build_translation_file(opts->input_trans_name[i], retval->input_header[i], retval->output_header);
+        }
+    }
+
     return retval;
 }
 
@@ -135,8 +233,10 @@ bool merge(state_t* opts) {
     bam1_t** file_read = calloc(opts->input_count, sizeof(bam1_t*));
     size_t files_to_merge = opts->input_count;
     for (size_t i = 0; i < opts->input_count; i++) {
-        file_read[i] = bam_init1();
+        file_read[i] = bam_init1();  // initialise the read for each
+        // Read the first record for each
         if (sam_read1(opts->input_file[i], opts->input_header[i], file_read[i]) < 0) {
+            // Nothing more to read?  Ignore this file
             bam_destroy1(file_read[i]);
             file_read[i] = NULL;
             files_to_merge--;
@@ -145,8 +245,15 @@ bool merge(state_t* opts) {
 
     while (files_to_merge > 0) {
         size_t i = selectRead(file_read, opts->input_count);
+        if (opts->input_trans[i]) {
+            // Translate the tid and mate tid
+            file_read[i]->core.tid = opts->input_trans[i][file_read[i]->core.tid];
+            file_read[i]->core.mtid = opts->input_trans[i][file_read[i]->core.mtid];
+        }
+        // Write the read out and replace it with the next one to process
         sam_write1(opts->output_file, opts->output_header, file_read[i]);
         if (sam_read1(opts->input_file[i], opts->input_header[i], file_read[i]) < 0) {
+            // Nothing more to read?  Ignore this file in future
             bam_destroy1(file_read[i]);
             file_read[i] = NULL;
             files_to_merge--;
