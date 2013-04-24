@@ -14,6 +14,12 @@
 // You should have received a copy of the GNU General Public License along with
 // this program. If not, see L<http://www.gnu.org/licenses/>.
 
+// Linux fixes
+#define _GNU_SOURCE
+#ifndef SIZE_T_MAX
+#define SIZE_T_MAX      (~((size_t) 0))
+#endif
+
 #include <htslib/sam.h>
 #include <string.h>
 #include <stdio.h>
