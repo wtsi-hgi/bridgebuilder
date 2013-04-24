@@ -224,6 +224,7 @@ size_t selectRead( bam1_t **file_read, size_t input_count )
             // To complicate matters tid == 0 is a special value which should always go last
             if ((tid_min > file_read[i]->core.tid && file_read[i]->core.tid != 0 ) ||
                 (tid_min == INT32_MAX && file_read[i]->core.tid == 0) ||
+                (tid_min == 0 && file_read[i]->core.tid != 0) ||
                 (tid_min == file_read[i]->core.tid && pos_min > file_read[i]->core.pos)) {
                 tid_min = file_read[i]->core.tid;
                 pos_min = file_read[i]->core.pos;
