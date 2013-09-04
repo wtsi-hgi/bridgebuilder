@@ -30,10 +30,10 @@
   int start;
   int end;
   char* id;    
- } MappedRange;
+ } Range;
 
  // Read map from file
  CoordMap* bc_read_file(const char *filename);
 
  // Look up co-ordinates
- MappedRange* bc_map_range(CoordMap* coordMap, int start, int end);
+ Range* bc_map_range(CoordMap* coordMap, Range* oldRef);
