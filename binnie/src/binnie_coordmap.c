@@ -19,23 +19,26 @@
  * this program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
+#include "config.h"
 
 #include <assert.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include "binnie.h"
 #include "binnie_log.h"
 #include "gl_xlist.h"
 #include "gl_avltreehash_list.h"
 #include "hash-pjw.h"
+#include "binnie_coordmap.h"
 
 #define LINE_LENGTH 128
 #define LINE_SEP = '\t'
 #define MAX_DEPTH 50
 
-struct entry {
+typedef struct {
   char * key;
   avl_node * data;
-};
+} entry;
 
 /*
  * entry_equals
@@ -71,7 +74,7 @@ size_t entry_hashcode(const void *elt)
   size_t hashcode;
 
   DLOG("entry_hashcode()");
-  bbr = elt;
+  const bbr = elt;
 
   /* get uid */
   char* uid = bbr->key;
@@ -109,60 +112,6 @@ typedef struct CoordMap {
   gl_list_t * entries;
 } CoordMap;
 
-CoordMap* bc_read_file(const char *filename) {
-  gl_list_t map = gl_list_create_empty(GL_AVLTREEHASH_LIST, 
-                                       entry_equals, 
-                                       entry_hashcode, 
-                                       entry_dispose, 
-                                       true);
-  FILE *fp = fopen(filename, "r");
-  // Ignore header
-  while (fgetc(fp) != '\n') {}
-  // Read each line into the thing
-  char line[LINE_LENGTH];
-  while (fgets(line, LINE_LENGTH, fp) != NULL) {
-    // Parse the line
-    // Tab separated
-    // from_sn from_start      from_end        to_sn   to_start        to_end
-    char* from_sn, to_sn;
-    int from_start, from_end, to_start, to_end;
-    sscanf(line, "%s\t%d\t%d\t%s\t%d\t%d", from_sn, from_start, from_end, to_sn, to_start, to_end);
-    Range from_range = { from_start, from_end, from_sn };
-    Range to_range = { to_start, to_end, to_sn };
-    entry e_bad = { from_sn, NULL };
-    // Check whether we already have something for this key.
-    gl_list_node_t n = gl_list_search(map, &e_bad);
-    if (n == NULL) {
-      avl_node * newtree = avl_single(&from_range, &to_range);
-      entry e1 = {from_sn, newtree};
-      gl_list_add_last(&e1);
-    } else {
-      entry* e = (entry*) gl_list_node_value(map, n);
-      avl_insert(e->data, from_range, to_range);
-    }
-  }
-
-  fclose(fp);
-  CoordMap cm = {&map};
-  return &cm;
-}
-
-Range* bc_map_range(CoordMap* coordMap, Range* oldRef) {
-  char * key = oldRef->key;
-  entry e_bad = {key, NULL};
-  gl_list_t* map = coordMap->entries;
-  gl_list_node_t n = gl_list_search(map, e_bad);
-
-  if (n == NULL) {
-    return NULL;
-  } else {
-    entry* e = (entry*) gl_list_node_value(map, n);
-    return avl_lookup(e->data, oldRef);
-  }
-}
-
-// AVL tree
-
 typedef struct avl_node {
   Range * key;
   Range * data;
@@ -196,18 +145,54 @@ int sgn(int x) {
   Look up a node in the tree. Returns NULL (yuck!) if the tree does not contain the item.
 */
 Range *avl_lookup(avl_node *tree, Range* key) {
-  int a = tree->key->start < key->start
+  int a = tree->key->start < key->start;
   if (a && tree->key->end > key->end) {
     return tree->data;
   } else if (a && tree->key->end < key->end) {
     return NULL;
   } else {
-    if (tree->link[a] == NULL) {
+    if (tree->child[a] == NULL) {
       return NULL;
     } else {
-     return avl_lookup(tree->link[a], key);
+     return avl_lookup(tree->child[a], key);
     }
   }
+}
+
+// Rotate root in dir and return the new root
+avl_node * avl_rotate(avl_node* p, int dir) {
+  avl_node *c = p->child[dir];
+  p->child[dir] = c->child[!dir];
+  c->child[!dir] = p;
+
+  // Update balance!
+  int d = (dir == 0) ? -1 : 1;
+  if (c->balance * d < 0) {
+    p->balance = p->balance + d - c->balance;
+  } else {
+    p->balance = p->balance  + d;
+  }
+
+  if (p->balance * d > 0) {
+    c->balance = c->balance + p->balance + d;
+  } else {
+    c->balance = c->balance + d;
+  }
+
+  return c;
+}
+
+// Balance the tree after an insert.
+// Dir indicates the side of the tree with a positive imbalance - e.g.
+// dir=0 suggests a left imbalance, dir=1 suggests a right imbalance.
+avl_node * avl_insert_balance(avl_node* p, int dir) {
+  int pbal = dir == 0 ? 1 : -1;
+  // We need to test whether the sign of c's balance agrees with the dir
+  if (sgn(p->child[dir]->balance) != pbal) {
+    avl_node *d = avl_rotate(p->child[dir], !dir);
+    p->child[dir] = d;
+  }
+  return avl_rotate(p, dir);
 }
 
 /* Insert a node into the tree. We walk down the tree until we insert, storing the path
@@ -256,7 +241,7 @@ avl_node* avl_insert(avl_node* tree, Range* key, Range* value) {
       break;
     } else if (bal < -1 || bal > 1) {
       // Out of balance, so we need to rebalance.
-      rev[idx - 1]->link[revd[idx - 1]] = avl_insert_balance(rev[idx], redv[idx]);
+      rev[idx - 1]->child[revd[idx - 1]] = avl_insert_balance(rev[idx], revd[idx]);
       break;
     }
     idx = idx - 1;
@@ -265,38 +250,54 @@ avl_node* avl_insert(avl_node* tree, Range* key, Range* value) {
   return rev[idx];
 }
 
-// Balance the tree after an insert.
-// Dir indicates the side of the tree with a positive imbalance - e.g.
-// dir=0 suggests a left imbalance, dir=1 suggests a right imbalance.
-avl_node * avl_insert_balance(avl_node* p, int dir) {
-  int pbal = dir == 0 ? 1 : -1;
-  // We need to test whether the sign of c's balance agrees with the dir
-  if (sgn(p->child[dir]->balance) != pbal) {
-    avl_node *d = avl_rotate(p->child[dir], !dir);
-    p->child[dir] = d;
+CoordMap* bc_read_file(const char *filename) {
+  gl_list_t map = gl_list_create_empty(GL_AVLTREEHASH_LIST, 
+                                       entry_equals, 
+                                       entry_hashcode, 
+                                       entry_dispose, 
+                                       true);
+  FILE *fp = fopen(filename, "r");
+  // Ignore header
+  while (fgetc(fp) != '\n') {}
+  // Read each line into the thing
+  char line[LINE_LENGTH];
+  while (fgets(line, LINE_LENGTH, fp) != NULL) {
+    // Parse the line
+    // Tab separated
+    // from_sn from_start      from_end        to_sn   to_start        to_end
+    char* from_sn, to_sn;
+    int from_start, from_end, to_start, to_end;
+    sscanf(line, "%s\t%d\t%d\t%s\t%d\t%d", from_sn, from_start, from_end, to_sn, to_start, to_end);
+    Range from_range = { from_start, from_end, from_sn };
+    Range to_range = { to_start, to_end, to_sn };
+    entry e_bad = { from_sn, NULL };
+    // Check whether we already have something for this key.
+    gl_list_node_t n = gl_list_search(map, &e_bad);
+    if (n == NULL) {
+      avl_node * newtree = avl_single(&from_range, &to_range);
+      entry e1 = {from_sn, newtree};
+      gl_list_add_last(map, &e1);
+    } else {
+      entry* e = (entry*) gl_list_node_value(map, n);
+      avl_insert(e->data, from_range, to_range);
+    }
   }
-  return avl_rotate(p, dir);
+
+  fclose(fp);
+  CoordMap cm = {&map};
+  return &cm;
 }
 
-// Rotate root in dir and return the new root
-avl_node * avl_rotate(avl_node* p, int dir) {
-  avl_node *c = p->child[dir];
-  p->child[dir] = c->child[!dir];
-  c->child[!dir] = p;
+Range* bc_map_range(CoordMap* coordMap, Range* oldRef) {
+  char * key = oldRef->key;
+  entry e_bad = {key, NULL};
+  gl_list_t* map = coordMap->entries;
+  gl_list_node_t n = gl_list_search(map, e_bad);
 
-  // Update balance!
-  int d = (dir == 0) ? -1 : 1;
-  if (c->balance * d < 0) {
-    p->balance = p->balance + d - c->balance;
+  if (n == NULL) {
+    return NULL;
   } else {
-    p->balance = p->balance  + d;
+    entry* e = (entry*) gl_list_node_value(map, n);
+    return avl_lookup(e->data, oldRef);
   }
-
-  if (p->balance * d > 0) {
-    c->balance = c->balance + p->balance + d;
-  } else {
-    c->balance = c->balance + d;
-  }
-
-  return c;
 }
