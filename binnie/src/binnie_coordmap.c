@@ -24,6 +24,7 @@
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include "binnie.h"
 #include "binnie_log.h"
 #include "gl_xlist.h"
@@ -34,6 +35,17 @@
 #define LINE_LENGTH 128
 #define LINE_SEP = '\t'
 #define MAX_DEPTH 50
+
+typedef struct CoordMap {
+  gl_list_t * entries;
+} CoordMap;
+
+typedef struct avl_node {
+  Range * key;
+  Range * data;
+  int balance;
+  struct avl_node *child[2];
+} avl_node;
 
 typedef struct {
   char * key;
@@ -70,11 +82,10 @@ static bool entry_equals(const void *elt1, const void *elt2)
  */
 size_t entry_hashcode(const void *elt)
 {
-  entry *bbr;
   size_t hashcode;
 
   DLOG("entry_hashcode()");
-  const bbr = elt;
+  const entry *bbr = elt;
 
   /* get uid */
   char* uid = bbr->key;
@@ -97,38 +108,27 @@ size_t entry_hashcode(const void *elt)
  */
 void entry_dispose(const void *elt)
 {
-  const binnie_binned_read_t *bbr;
+  const entry *bbr;
 
   DLOG("entry_dispose()");
   bbr = elt;
 
-  /* free the binnie_binned_read_t struct itself */
+  /* free the entry struct itself */
   free((void *)bbr);
   
   DLOG("entry_dispose: returning void");
 }
 
-typedef struct CoordMap {
-  gl_list_t * entries;
-} CoordMap;
-
-typedef struct avl_node {
-  Range * key;
-  Range * data;
-  int balance;
-  struct avl_node *child[2];
-} avl_node;
-
 // Allocate a single AVL node.
 avl_node* avl_single (Range* key, Range* data) {
-  avl_node* n = malloc (sizeof *n);
-  if (n != NULL) {
+  avl_node* rn = malloc (sizeof *rn);
+  if (rn != NULL) {
     rn->key=key;
     rn->data=data;
     rn->balance = 0;
     rn->child[0]=rn->child[1]=NULL;
   }
-  return n;
+  return rn;
 }
 
 int sgn(int x) {
@@ -215,7 +215,7 @@ avl_node* avl_insert(avl_node* tree, Range* key, Range* value) {
     revd[idx] = dir;
     rev[idx] = i;
 
-    if (*i != NULL) {
+    if (i != NULL) {
       // Increment
       idx = idx + 1;
       // and walk
@@ -279,7 +279,7 @@ CoordMap* bc_read_file(const char *filename) {
       gl_list_add_last(map, &e1);
     } else {
       entry* e = (entry*) gl_list_node_value(map, n);
-      avl_insert(e->data, from_range, to_range);
+      avl_insert(e->data, &from_range, &to_range);
     }
   }
 
@@ -289,10 +289,10 @@ CoordMap* bc_read_file(const char *filename) {
 }
 
 Range* bc_map_range(CoordMap* coordMap, Range* oldRef) {
-  char * key = oldRef->key;
+  char * key = oldRef->id;
   entry e_bad = {key, NULL};
   gl_list_t* map = coordMap->entries;
-  gl_list_node_t n = gl_list_search(map, e_bad);
+  gl_list_node_t n = gl_list_search(map, &e_bad);
 
   if (n == NULL) {
     return NULL;
