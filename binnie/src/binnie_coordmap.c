@@ -21,7 +21,147 @@
  */
 
 #include <assert.h>
+#include <stdio.h>
+#include "binnie.h"
+#include "binnie_log.h"
+#include "gl_xlist.h"
+#include "gl_avltreehash_list.h"
+#include "hash-pjw.h"
+
+#define LINE_LENGTH 128
+#define LINE_SEP = '\t'
 #define MAX_DEPTH 50
+
+struct entry {
+  char * key;
+  avl_node * data;
+};
+
+/*
+ * entry_equals
+ * ------------------
+ *
+ * INPUT: pointers to two entry structs to be compared
+ * OUTPUT: bool (true if equal, false if not equal)
+ *
+ */
+static bool entry_equals(const void *elt1, const void *elt2)
+{
+  const entry *bbr1;
+  const entry *bbr2;
+
+  DLOG("entry_equals()");
+  bbr1 = elt1;
+  bbr2 = elt2;
+  
+  return strcmp(bbr1->key, bbr2->key);
+}
+
+/*
+ * entry_hashcode
+ * --------------------
+ *
+ * INPUT: pointer to entry read to be hashed
+ * OUTPUT: size_t hash of the read name
+ *
+ */
+size_t entry_hashcode(const void *elt)
+{
+  entry *bbr;
+  size_t hashcode;
+
+  DLOG("entry_hashcode()");
+  bbr = elt;
+
+  /* get uid */
+  char* uid = bbr->key;
+  DLOG("entry_hashcode: calling hash_pjw on uid=[%s]", uid);
+  hashcode = hash_pjw(uid, BINNIE_TABLESIZE);
+  
+  DLOG("bbr_hashcode: have hashcode=[%zu] for uid=[%s] tablesize=[%zu]", hashcode, uid, BINNIE_TABLESIZE);
+  
+  DLOG("bbr_hashcode: returning hashcode=[%zu]", hashcode);
+  return hashcode;
+}
+
+
+/*
+ * entry_dispose
+ * -------------------
+ *
+ * INPUT: pointer to binnie_binned_read_t read to be disposed of
+ *
+ */
+void entry_dispose(const void *elt)
+{
+  const binnie_binned_read_t *bbr;
+
+  DLOG("entry_dispose()");
+  bbr = elt;
+
+  /* free the binnie_binned_read_t struct itself */
+  free((void *)bbr);
+  
+  DLOG("entry_dispose: returning void");
+}
+
+typedef struct CoordMap {
+  gl_list_t * entries;
+} CoordMap;
+
+CoordMap* bc_read_file(const char *filename) {
+  gl_list_t map = gl_list_create_empty(GL_AVLTREEHASH_LIST, 
+                                       entry_equals, 
+                                       entry_hashcode, 
+                                       entry_dispose, 
+                                       true);
+  FILE *fp = fopen(filename, "r");
+  // Ignore header
+  while (fgetc(fp) != '\n') {}
+  // Read each line into the thing
+  char line[LINE_LENGTH];
+  while (fgets(line, LINE_LENGTH, fp) != NULL) {
+    // Parse the line
+    // Tab separated
+    // from_sn from_start      from_end        to_sn   to_start        to_end
+    char* from_sn, to_sn;
+    int from_start, from_end, to_start, to_end;
+    sscanf(line, "%s\t%d\t%d\t%s\t%d\t%d", from_sn, from_start, from_end, to_sn, to_start, to_end);
+    Range from_range = { from_start, from_end, from_sn };
+    Range to_range = { to_start, to_end, to_sn };
+    entry e_bad = { from_sn, NULL };
+    // Check whether we already have something for this key.
+    gl_list_node_t n = gl_list_search(map, &e_bad);
+    if (n == NULL) {
+      avl_node * newtree = avl_single(&from_range, &to_range);
+      entry e1 = {from_sn, newtree};
+      gl_list_add_last(&e1);
+    } else {
+      entry* e = (entry*) gl_list_node_value(map, n);
+      avl_insert(e->data, from_range, to_range);
+    }
+  }
+
+  fclose(fp);
+  CoordMap cm = {&map};
+  return &cm;
+}
+
+Range* bc_map_range(CoordMap* coordMap, Range* oldRef) {
+  char * key = oldRef->key;
+  entry e_bad = {key, NULL};
+  gl_list_t* map = coordMap->entries;
+  gl_list_node_t n = gl_list_search(map, e_bad);
+
+  if (n == NULL) {
+    return NULL;
+  } else {
+    entry* e = (entry*) gl_list_node_value(map, n);
+    return avl_lookup(e->data, oldRef);
+  }
+}
+
+// AVL tree
 
 typedef struct avl_node {
   Range * key;
@@ -39,7 +179,6 @@ avl_node* avl_single (Range* key, Range* data) {
     rn->balance = 0;
     rn->child[0]=rn->child[1]=NULL;
   }
-
   return n;
 }
 
@@ -53,12 +192,21 @@ int sgn(int x) {
   }
 }
 
+/*
+  Look up a node in the tree. Returns NULL (yuck!) if the tree does not contain the item.
+*/
 Range *avl_lookup(avl_node *tree, Range* key) {
   int a = tree->key->start < key->start
   if (a && tree->key->end > key->end) {
     return tree->data;
+  } else if (a && tree->key->end < key->end) {
+    return NULL;
   } else {
-    return avl_lookup(tree->link[a], key);
+    if (tree->link[a] == NULL) {
+      return NULL;
+    } else {
+     return avl_lookup(tree->link[a], key);
+    }
   }
 }
 
@@ -66,7 +214,7 @@ Range *avl_lookup(avl_node *tree, Range* key) {
    which we used to walk down. We then walk back up the same path checking whether we need
    to rebalance.
 */
-void avl_insert(avl_node* tree, Range* key, Range* value) {
+avl_node* avl_insert(avl_node* tree, Range* key, Range* value) {
 
   // Iterator
   avl_node *i = tree;
@@ -96,11 +244,11 @@ void avl_insert(avl_node* tree, Range* key, Range* value) {
   i->child[revd[idx]] = avl_single(key, value);
 
   // Walk back up the path.
-  while(top != 0) {
+  while(idx != 0) {
     // Update the balance
-    rev[top]->balance += revd[top] == 0 ? 1 : -1;
+    rev[idx]->balance += revd[idx] == 0 ? 1 : -1;
 
-    int bal = rev[top]->balance;
+    int bal = rev[idx]->balance;
     if (bal == 0) {
       /* If we get a balance 0 during the walk up, then we have balanced a subtree
       and hence need walk no further.
@@ -108,12 +256,13 @@ void avl_insert(avl_node* tree, Range* key, Range* value) {
       break;
     } else if (bal < -1 || bal > 1) {
       // Out of balance, so we need to rebalance.
-      rev[top - 1]->link[revd[top - 1]] = avl_insert_balance(rev[top], redv[top]);
+      rev[idx - 1]->link[revd[idx - 1]] = avl_insert_balance(rev[idx], redv[idx]);
       break;
     }
-    top = top - 1;
+    idx = idx - 1;
   }
 
+  return rev[idx];
 }
 
 // Balance the tree after an insert.
@@ -151,4 +300,3 @@ avl_node * avl_rotate(avl_node* p, int dir) {
 
   return c;
 }
-
