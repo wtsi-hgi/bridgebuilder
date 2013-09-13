@@ -265,12 +265,12 @@ CoordMap* bc_read_file(const char *filename) {
     // Parse the line
     // Tab separated
     // from_sn from_start      from_end        to_sn   to_start        to_end
-    char* from_sn, to_sn;
+    char *from_sn, *to_sn;
     int from_start, from_end, to_start, to_end;
     sscanf(line, "%s\t%d\t%d\t%s\t%d\t%d", from_sn, from_start, from_end, to_sn, to_start, to_end);
     Range from_range = { from_start, from_end, from_sn };
     Range to_range = { to_start, to_end, to_sn };
-    entry e_bad = { from_sn, NULL };
+    const entry e_bad = { from_sn, NULL };
     // Check whether we already have something for this key.
     gl_list_node_t n = gl_list_search(map, &e_bad);
     if (n == NULL) {
@@ -284,20 +284,21 @@ CoordMap* bc_read_file(const char *filename) {
   }
 
   fclose(fp);
-  CoordMap cm = {&map};
-  return &cm;
+  CoordMap *cm = malloc(sizeof *cm);
+  cm->entries = &map;
+  return cm;
 }
 
 Range* bc_map_range(CoordMap* coordMap, Range* oldRef) {
   char * key = oldRef->id;
   entry e_bad = {key, NULL};
   gl_list_t* map = coordMap->entries;
-  gl_list_node_t n = gl_list_search(map, &e_bad);
+  gl_list_node_t n = gl_list_search(*map, &e_bad);
 
   if (n == NULL) {
     return NULL;
   } else {
-    entry* e = (entry*) gl_list_node_value(map, n);
+    entry* e = (entry*) gl_list_node_value(*map, n);
     return avl_lookup(e->data, oldRef);
   }
 }
