@@ -52,6 +52,11 @@ typedef struct {
   avl_node * data;
 } entry;
 
+typedef struct {
+  Range* from;
+  Range* to;
+} RangeMap;
+
 /*
  * entry_equals
  * ------------------
@@ -144,10 +149,13 @@ int sgn(int x) {
 /*
   Look up a node in the tree. Returns NULL (yuck!) if the tree does not contain the item.
 */
-Range *avl_lookup(avl_node *tree, Range* key) {
+RangeMap *avl_lookup(avl_node *tree, Range* key) {
   int a = tree->key->start < key->start;
   if (a && tree->key->end > key->end) {
-    return tree->data;
+    RangeMap *r = malloc(sizeof *r);
+    r->from = tree->key;
+    r->to = tree->data;
+    return r;
   } else if (a && tree->key->end < key->end) {
     return NULL;
   } else {
@@ -295,10 +303,35 @@ Range* bc_map_range(CoordMap* coordMap, Range* oldRef) {
   gl_list_t* map = coordMap->entries;
   gl_list_node_t n = gl_list_search(*map, &e_bad);
 
+  Range *mappedFrom;
+  Range *mappedTo;
   if (n == NULL) {
     return NULL;
   } else {
     entry* e = (entry*) gl_list_node_value(*map, n);
-    return avl_lookup(e->data, oldRef);
+    RangeMap* rm = avl_lookup(e->data, oldRef);
+    mappedFrom = rm->from;
+    mappedTo = rm->to;
   }
+
+  // Look up offsets in mapped range.
+  int toStart = mappedTo->start;
+  int toEnd = mappedTo->end;
+  if (toStart > toEnd) {
+    // If I must program in C, I'm at least going to do silly hacky C things like doing this
+    // swap to avoid the 'expense' of another variable.
+    toEnd = toStart + toEnd;
+    toStart = toEnd - toStart;
+    toEnd = toEnd - toStart;
+  }
+  int start = oldRef->start - mappedFrom->start + toStart;
+  int end = start + (oldRef->end - oldRef->start);
+
+  Range* newRef = malloc(sizeof *newRef);
+  newRef->start = start;
+  newRef->end = end;
+  newRef->id = mappedTo->id;
+
+  return newRef;
+
 }
