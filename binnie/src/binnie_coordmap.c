@@ -74,7 +74,7 @@ static bool entry_equals(const void *elt1, const void *elt2)
   bbr1 = elt1;
   bbr2 = elt2;
   
-  return strcmp(bbr1->key, bbr2->key);
+  return strcmp(bbr1->key, bbr2->key) == 0;
 }
 
 /*
@@ -240,14 +240,15 @@ avl_node* avl_insert(avl_node* tree, Range* key, Range* value) {
       // and walk
       i = i->child[dir];
     } else {
-      i = rev[idx -1];
+      idx = idx - 1;
+      i = rev[idx];
+  idx = idx - 1; // Don't need to balance on the child.
       break;
     }
   }
 
   // Insert the new child.
   i->child[revd[idx]] = avl_single(key, value);
-  idx = idx - 1; // Don't need to balance on the child.
 
   // Walk back up the path.
   while(idx != 0) {
