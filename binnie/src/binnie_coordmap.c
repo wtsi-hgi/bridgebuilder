@@ -29,12 +29,13 @@
 #include "binnie_log.h"
 #include "gl_xlist.h"
 #include "gl_avltreehash_list.h"
+#include "xalloc.h"
 #include "hash-pjw.h"
 #include "binnie_coordmap.h"
 
-#define LINE_LENGTH 128
+#define LINE_LENGTH 256
 #define LINE_SEP = '\t'
-#define MAX_DEPTH 50
+#define MAX_DEPTH 500
 
 typedef struct CoordMap {
   gl_list_t * entries;
@@ -70,7 +71,6 @@ static bool entry_equals(const void *elt1, const void *elt2)
   const entry *bbr1;
   const entry *bbr2;
 
-  DLOG("entry_equals()");
   bbr1 = elt1;
   bbr2 = elt2;
   
@@ -89,17 +89,17 @@ size_t entry_hashcode(const void *elt)
 {
   size_t hashcode;
 
-  DLOG("entry_hashcode()");
+  // DLOG("entry_hashcode()");
   const entry *bbr = elt;
 
   /* get uid */
   char* uid = bbr->key;
-  DLOG("entry_hashcode: calling hash_pjw on uid=[%s]", uid);
+  // DLOG("entry_hashcode: calling hash_pjw on uid=[%s]", uid);
   hashcode = hash_pjw(uid, BINNIE_TABLESIZE);
   
-  DLOG("bbr_hashcode: have hashcode=[%zu] for uid=[%s] tablesize=[%zu]", hashcode, uid, BINNIE_TABLESIZE);
+  // DLOG("bbr_hashcode: have hashcode=[%zu] for uid=[%s] tablesize=[%zu]", hashcode, uid, BINNIE_TABLESIZE);
   
-  DLOG("bbr_hashcode: returning hashcode=[%zu]", hashcode);
+  // DLOG("bbr_hashcode: returning hashcode=[%zu]", hashcode);
   return hashcode;
 }
 
@@ -124,9 +124,20 @@ void entry_dispose(const void *elt)
   DLOG("entry_dispose: returning void");
 }
 
+Range * clone_range(Range* old) {
+  Range* new = xmalloc(sizeof(*new));
+  new->start = old->start;
+  new->end = old->end;
+  new->id = old->id;
+  return new;
+}
+
 // Allocate a single AVL node.
-avl_node* avl_single (Range* key, Range* data) {
+avl_node* avl_single (Range* key1, Range* data1) {
   avl_node* rn = malloc (sizeof *rn);
+  Range *key = clone_range(key1);
+  Range *data = clone_range(data1);
+
   if (rn != NULL) {
     rn->key=key;
     rn->data=data;
@@ -218,23 +229,25 @@ avl_node* avl_insert(avl_node* tree, Range* key, Range* value) {
   int revd[MAX_DEPTH];
 
   for (;;) {
-    // Record we've visited
-    int dir = key->start > tree->key->start;
-    revd[idx] = dir;
-    rev[idx] = i;
-
     if (i != NULL) {
+      // Record we've visited
+      int dir = key->start > i->key->start;
+      revd[idx] = dir;
+      rev[idx] = i;
+
       // Increment
       idx = idx + 1;
       // and walk
       i = i->child[dir];
     } else {
+      i = rev[idx -1];
       break;
     }
   }
 
   // Insert the new child.
   i->child[revd[idx]] = avl_single(key, value);
+  idx = idx - 1; // Don't need to balance on the child.
 
   // Walk back up the path.
   while(idx != 0) {
@@ -259,12 +272,16 @@ avl_node* avl_insert(avl_node* tree, Range* key, Range* value) {
 }
 
 CoordMap* bc_read_file(const char *filename) {
+  DLOG("bc_read_file()");
   gl_list_t map = gl_list_create_empty(GL_AVLTREEHASH_LIST, 
                                        entry_equals, 
                                        entry_hashcode, 
                                        entry_dispose, 
                                        true);
   FILE *fp = fopen(filename, "r");
+
+  if (!fp) exit(1234);
+
   // Ignore header
   while (fgetc(fp) != '\n') {}
   // Read each line into the thing
@@ -273,18 +290,25 @@ CoordMap* bc_read_file(const char *filename) {
     // Parse the line
     // Tab separated
     // from_sn from_start      from_end        to_sn   to_start        to_end
-    char *from_sn, *to_sn;
+    char *from_sn = xmalloc(LINE_LENGTH * sizeof(char));
+    char *to_sn = xmalloc(LINE_LENGTH * sizeof(char));
     int from_start, from_end, to_start, to_end;
-    sscanf(line, "%s\t%d\t%d\t%s\t%d\t%d", from_sn, from_start, from_end, to_sn, to_start, to_end);
+    sscanf(line, "%s\t%d\t%d\t%s\t%d\t%d", from_sn, &from_start, &from_end, to_sn, &to_start, &to_end);
+    DLOG("Input line: %s\t%d\t%d\t%s\t%d\t%d", from_sn, from_start, from_end, to_sn, to_start, to_end);
     Range from_range = { from_start, from_end, from_sn };
     Range to_range = { to_start, to_end, to_sn };
-    const entry e_bad = { from_sn, NULL };
+    entry *e_bad = xmalloc(sizeof(entry));
+    e_bad->key=from_sn;
+    e_bad->data=NULL;
+
     // Check whether we already have something for this key.
-    gl_list_node_t n = gl_list_search(map, &e_bad);
+    gl_list_node_t n = gl_list_search(map, e_bad);
     if (n == NULL) {
       avl_node * newtree = avl_single(&from_range, &to_range);
-      entry e1 = {from_sn, newtree};
-      gl_list_add_last(map, &e1);
+      entry* e1 = malloc(sizeof(entry));
+      e1->key=from_sn;
+      e1->data = newtree;
+      gl_list_add_last(map, e1);
     } else {
       entry* e = (entry*) gl_list_node_value(map, n);
       avl_insert(e->data, &from_range, &to_range);
@@ -292,12 +316,13 @@ CoordMap* bc_read_file(const char *filename) {
   }
 
   fclose(fp);
-  CoordMap *cm = malloc(sizeof *cm);
+  CoordMap *cm = malloc(sizeof(CoordMap));
   cm->entries = &map;
   return cm;
 }
 
 Range* bc_map_range(CoordMap* coordMap, Range* oldRef) {
+  DLOG("bc_map_range()");
   char * key = oldRef->id;
   entry e_bad = {key, NULL};
   gl_list_t* map = coordMap->entries;
@@ -310,8 +335,12 @@ Range* bc_map_range(CoordMap* coordMap, Range* oldRef) {
   } else {
     entry* e = (entry*) gl_list_node_value(*map, n);
     RangeMap* rm = avl_lookup(e->data, oldRef);
-    mappedFrom = rm->from;
-    mappedTo = rm->to;
+    if (rm == NULL) {
+      return NULL;
+    } else {
+      mappedFrom = rm->from;
+      mappedTo = rm->to;
+    }
   }
 
   // Look up offsets in mapped range.
@@ -333,5 +362,4 @@ Range* bc_map_range(CoordMap* coordMap, Range* oldRef) {
   newRef->id = mappedTo->id;
 
   return newRef;
-
 }

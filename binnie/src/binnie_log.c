@@ -66,6 +66,7 @@ void DLOG(const char *msgfmt, ...)
     vfprintf(stderr, msgfmt, argp);
     va_end(argp);
     fprintf(stderr, "\n");
+    fflush(stderr);
   }
 }
 #endif
