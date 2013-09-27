@@ -12,7 +12,7 @@ int main()
   fflush(stdout);
   const char * filename = "/media/sf_nc6/scratch/hg18ToHg19.coordmap";
 
-  volatile Range oldR = {700, 800, "chr1"};
+  volatile Range oldR = {107924340, 107934380, "chr12"};
 
   CoordMap *map = bc_read_file(filename);
 
