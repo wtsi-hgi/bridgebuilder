@@ -167,7 +167,7 @@ RangeMap *avl_lookup(avl_node *tree, Range* key) {
     r->from = tree->key;
     r->to = tree->data;
     return r;
-  } else if (a && tree->key->end < key->end) {
+  } else if (a && tree->key->end > key->start) {
     return NULL;
   } else {
     if (tree->child[a] == NULL) {
@@ -242,7 +242,6 @@ avl_node* avl_insert(avl_node* tree, Range* key, Range* value) {
     } else {
       idx = idx - 1;
       i = rev[idx];
-  idx = idx - 1; // Don't need to balance on the child.
       break;
     }
   }
