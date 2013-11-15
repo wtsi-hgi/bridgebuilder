@@ -37,3 +37,6 @@
 
  // Look up co-ordinates
  Range* bc_map_range(CoordMap* coordMap, Range* oldRef);
+
+ // Free the coordinate map
+ void bc_free_coordmap(CoordMap* coordMap);
