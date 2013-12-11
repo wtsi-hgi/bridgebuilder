@@ -61,7 +61,7 @@ int main(int argc, int *argv[])
 
   char line[LINE_LENGTH];
     // Read each line into the thing
-  while (fgets(line, LINE_LENGTH-1, infile) != NULL) {
+  while (fgets(line, LINE_LENGTH-1, in) != NULL) {
     Range* from = createRange(line);
     Range* to = bc_map_range(map, from);
     free(from);
@@ -78,6 +78,6 @@ int main(int argc, int *argv[])
   bc_free_coordmap(map);
 
   fclose(out);
-  fclose(infile);
+  fclose(in);
 }
 
