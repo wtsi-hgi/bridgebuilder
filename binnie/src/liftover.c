@@ -69,6 +69,8 @@ int main(int argc, int *argv[])
     if (to != NULL) {
       fprintf(out, "%s\t%d\n", to->id, to->start+1);
       free(to);
+    } else {
+      fprintf(out, ".\t.\n");
     }
   }
   
