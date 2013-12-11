@@ -58,6 +58,14 @@ typedef struct {
   Range* to;
 } RangeMap;
 
+void avl_free(avl_node *thing);
+
+void bc_free_coordmap(CoordMap* coordMap) {
+ gl_list_free(*(coordMap->entries));
+ free(coordMap->entries);
+ free(coordMap);
+}
+
 /*
  * entry_equals
  * ------------------
@@ -119,8 +127,10 @@ void entry_dispose(const void *elt)
   bbr = elt;
 
   /* free the entry struct itself */
-  free((void *)bbr);
-  
+  free(bbr->key);
+  avl_free(bbr->data);
+  free(bbr);
+
   DLOG("entry_dispose: returning void");
 }
 
@@ -134,7 +144,7 @@ Range * clone_range(Range* old) {
 
 // Allocate a single AVL node.
 avl_node* avl_single (Range* key1, Range* data1) {
-  avl_node* rn = malloc (sizeof *rn);
+  avl_node* rn = xmalloc (sizeof *rn);
   Range *key = clone_range(key1);
   Range *data = clone_range(data1);
 
@@ -145,6 +155,21 @@ avl_node* avl_single (Range* key1, Range* data1) {
     rn->child[0]=rn->child[1]=NULL;
   }
   return rn;
+}
+
+void avl_free(avl_node *tree) {
+  if (tree->child[0]!=NULL) {
+    avl_free(tree->child[0]);
+  }
+  if (tree->child[1]!=NULL) {
+    avl_free(tree->child[1]);
+  }
+  free(tree->key->id);
+  free(tree->key);
+  free(tree->data->id);
+  free(tree->data);
+  free(tree);
+
 }
 
 int sgn(int x) {
@@ -163,7 +188,7 @@ int sgn(int x) {
 RangeMap *avl_lookup(avl_node *tree, Range* key) {
   int a = tree->key->start < key->start;
   if (a && tree->key->end > key->end) {
-    RangeMap *r = malloc(sizeof *r);
+    RangeMap *r = xmalloc(sizeof *r);
     r->from = tree->key;
     r->to = tree->data;
     return r;
@@ -273,11 +298,12 @@ avl_node* avl_insert(avl_node* tree, Range* key, Range* value) {
 
 CoordMap* bc_read_file(const char *filename) {
   DLOG("bc_read_file()");
-  gl_list_t map = gl_list_create_empty(GL_AVLTREEHASH_LIST, 
-                                       entry_equals, 
-                                       entry_hashcode, 
-                                       entry_dispose, 
-                                       true);
+  gl_list_t *map = xmalloc(sizeof(gl_list_t));
+  *map = gl_list_create_empty(GL_AVLTREEHASH_LIST, 
+			      entry_equals, 
+			      entry_hashcode, 
+			      entry_dispose, 
+			      true);
   FILE *fp = fopen(filename, "r");
 
   if (!fp) exit(1234);
@@ -302,31 +328,36 @@ CoordMap* bc_read_file(const char *filename) {
     e_bad->data=NULL;
 
     // Check whether we already have something for this key.
-    gl_list_node_t n = gl_list_search(map, e_bad);
+    gl_list_node_t n = gl_list_search(*map, e_bad);
+    free(e_bad);
     if (n == NULL) {
       avl_node * newtree = avl_single(&from_range, &to_range);
-      entry* e1 = malloc(sizeof(entry));
-      e1->key=from_sn;
+      entry* e1 = xmalloc(sizeof(entry));
+      e1->key=strndup(from_sn, LINE_LENGTH-1);
       e1->data = newtree;
-      gl_list_add_last(map, e1);
+      gl_list_add_last(*map, e1);
     } else {
-      entry* e = (entry*) gl_list_node_value(map, n);
+      entry* e = (entry*) gl_list_node_value(*map, n);
       avl_insert(e->data, &from_range, &to_range);
     }
   }
 
   fclose(fp);
-  CoordMap *cm = malloc(sizeof(CoordMap));
-  cm->entries = &map;
+  CoordMap *cm = xmalloc(sizeof(CoordMap));
+  cm->entries = map;
   return cm;
 }
 
 Range* bc_map_range(CoordMap* coordMap, Range* oldRef) {
   DLOG("bc_map_range()");
   char * key = oldRef->id;
-  entry e_bad = {key, NULL};
+  //  entry e_bad = {key, NULL};
+  entry *e_bad = xmalloc(sizeof(entry));
+  e_bad->key=key;
+  e_bad->data=NULL;
   gl_list_t* map = coordMap->entries;
-  gl_list_node_t n = gl_list_search(*map, &e_bad);
+  gl_list_node_t n = gl_list_search(*map, e_bad);
+  free(e_bad);
 
   Range *mappedFrom;
   Range *mappedTo;
@@ -340,6 +371,7 @@ Range* bc_map_range(CoordMap* coordMap, Range* oldRef) {
     } else {
       mappedFrom = rm->from;
       mappedTo = rm->to;
+      free(rm);
     }
   }
 
@@ -356,7 +388,7 @@ Range* bc_map_range(CoordMap* coordMap, Range* oldRef) {
   int start = oldRef->start - mappedFrom->start + toStart;
   int end = start + (oldRef->end - oldRef->start);
 
-  Range* newRef = malloc(sizeof *newRef);
+  Range* newRef = xmalloc(sizeof *newRef);
   newRef->start = start;
   newRef->end = end;
   newRef->id = mappedTo->id;

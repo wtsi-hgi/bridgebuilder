@@ -14,10 +14,13 @@ Range* createRange(char* input) {
   int from_pos;
   int is2 = sscanf(input, "%s\t%d", from_sn, &from_pos);
   if (is2 == 2) {
-    Range* new = xmalloc(sizeof(*new));
+    volatile Range* new = xmalloc(sizeof(*new));
     new->start = from_pos-1;
     new->end = from_pos-1;
-    new->id = strncat("chr", from_sn, LINE_LENGTH);
+    char *prefix_sn = xmalloc(LINE_LENGTH * sizeof(char));
+    prefix_sn = strncat(prefix_sn, "chr", 4);
+    new->id = strncat(prefix_sn, from_sn, LINE_LENGTH);
+    free(from_sn);
     return new;
   } else {
     fprintf(stderr, "%s\n", "Unable to construct range from input.");
@@ -56,18 +59,23 @@ int main(int argc, int *argv[])
     exit(1235);
   }
 
-  // Read each line into the thing
   char line[LINE_LENGTH];
-  while (fgets(line, LINE_LENGTH,in) != NULL) {
+    // Read each line into the thing
+  while (fgets(line, LINE_LENGTH-1, infile) != NULL) {
     Range* from = createRange(line);
     Range* to = bc_map_range(map, from);
-
+    free(from);
+    
     if (to != NULL) {
-     fprintf(out, "%s\t%d\n", to->id, to->start+1);
+      fprintf(out, "%s\t%d\n", to->id, to->start+1);
+      free(to);
     }
   }
+  
+
+  bc_free_coordmap(map);
 
   fclose(out);
-  fclose(in);
+  fclose(infile);
 }
 
