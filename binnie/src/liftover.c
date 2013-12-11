@@ -20,26 +20,41 @@ Range* createRange(char* input) {
     new->id = strncat("chr", from_sn, LINE_LENGTH);
     return new;
   } else {
+    fprintf(stderr, "%s\n", "Unable to construct range from input.");
     exit(1233);
   }
 }
 
-int main()
+int main(int argc, int *argv[])
 {
-  debug_flag = false;
-  DLOG("Test is starting!");
-  fflush(stdout);
-  const char * filename = "/lustre/scratch113/teams/hgi/users/nc6/svm/hg18ToHg19.coordmap";
-  CoordMap *map = bc_read_file(filename);
-  
-  const char * otherFilename = "/lustre/scratch113/teams/hgi/users/nc6/svm/ibd_ichip.sites.chr-pos";
-  const char * outFileName = "/lustre/scratch113/teams/hgi/users/nc6/svm/ibd_ichip.sites.hg19.chr-pos";
+  FILE *in;
+  FILE *out;
+  char *mapFile;
 
-  FILE *in = fopen(otherFilename, "r");
-  FILE *out = fopen(outFileName, "w");
+  if (argc == 3) {
+    // Assume in mapfile
+    in = fopen(argv[1] ,"r");
+    mapFile = argv[2];
+    out = stdout;
+  } else if (argc == 4) {
+    // in mapfile out
+    in = fopen(argv[1], "r");
+    out = fopen(argv[3], "w");
+    mapFile = argv[2];
+  } else {
+    fprintf(stderr, "Usage: liftover in mapFile [out].\nWhere [out] is not given writes to stdout.\n");
+  }
 
-  if (!in) exit(1234);
-  if (!out) exit(1235);
+  CoordMap *map = bc_read_file(mapFile);
+
+  if (!in) {
+    fprintf(stderr, "%s\nFilename:%s", "Unable to read input file.", argv[1]);
+    exit(1234);
+  }
+  if (!out) {
+    fprintf(stderr, "%s\n", "Unable to open output file for writing.");
+    exit(1235);
+  }
 
   // Read each line into the thing
   char line[LINE_LENGTH];
