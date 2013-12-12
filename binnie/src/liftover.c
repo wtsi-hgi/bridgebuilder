@@ -53,7 +53,7 @@ Range* createRange(char* input) {
   }
 }
 
-int main(int argc, int *argv[])
+int main(int argc, char *argv[])
 {
   FILE *in;
   FILE *out;
