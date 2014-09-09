@@ -146,7 +146,7 @@ int* build_translation( bam_hdr_t* file_header, bam_hdr_t* replace_header ) {
                 }
             }
             if (error) {
-                dprintf(STDERR_FILENO, "Translation table required.\n");
+	      dprintf(STDERR_FILENO, "Translation table entry missing for entry %d. file SQ: [%s]. output SQ: [%s]\n", i, file_header->target_name[i], replace_header->target_name[i]);
                 exit(-1);
             }
         }
@@ -176,6 +176,10 @@ state_t* init(parsed_opts_t* opts) {
     }
     retval->output_header = sam_hdr_read(hdr_load);
     sam_close(hdr_load);
+    if (!(retval->output_header->n_targets > 0)) {
+      dprintf(STDERR_FILENO, "Header has no SQ targets, pointless to proceed!\n");
+      return NULL;
+    }
     retval->output_file = sam_open(opts->output_name, "wb", 0);
     
     if (retval->output_file == NULL) {
