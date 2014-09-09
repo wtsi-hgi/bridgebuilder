@@ -146,7 +146,7 @@ int* build_translation( bam_hdr_t* file_header, bam_hdr_t* replace_header ) {
                 }
             }
             if (error) {
-                dprintf(STDERR_FILENO, "Translation table required.");
+                dprintf(STDERR_FILENO, "Translation table required.\n");
                 exit(-1);
             }
         }
@@ -163,7 +163,7 @@ int* build_translation( bam_hdr_t* file_header, bam_hdr_t* replace_header ) {
 state_t* init(parsed_opts_t* opts) {
     state_t* retval = malloc(sizeof(state_t));
     if (!retval) {
-        dprintf(STDERR_FILENO, "Out of memory");
+        dprintf(STDERR_FILENO, "Out of memory\n");
         return NULL;
     }
 
@@ -171,7 +171,7 @@ state_t* init(parsed_opts_t* opts) {
     // TODO: create RG translation table
     samFile* hdr_load = sam_open(opts->output_header_name, "r", 0);
     if (!hdr_load) {
-        dprintf(STDERR_FILENO, "Could not open header file");
+        dprintf(STDERR_FILENO, "Could not open header file\n");
         return NULL;
     }
     retval->output_header = sam_hdr_read(hdr_load);
@@ -256,7 +256,7 @@ size_t selectRead( bam1_t **file_read, size_t input_count )
 
 bool merge(state_t* opts) {
     if (sam_hdr_write(opts->output_file, opts->output_header) != 0) {
-        dprintf(STDERR_FILENO, "Could not write output file header");
+        dprintf(STDERR_FILENO, "Could not write output file header\n");
         return false;
     }
     
