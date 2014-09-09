@@ -20,6 +20,8 @@
 #define SIZE_T_MAX      (~((size_t) 0))
 #endif
 
+#include "config.h"
+
 #include <htslib/sam.h>
 #include <string.h>
 #include <stdio.h>
