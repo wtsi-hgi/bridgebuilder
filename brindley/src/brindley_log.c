@@ -1,5 +1,5 @@
 /*
- * binnie_log.c - handles BAM/SAM input and output (via htslib)
+ * brindley_log.c - logging for brindley
  *
  * Copyright (c) 2013 Genome Research Ltd. 
  * Author: Joshua C. Randall <jcrandall@alum.mit.edu>
@@ -28,7 +28,7 @@
 /* gnulib headers */
 #include "progname.h"
 
-#include "binnie_log.h"
+#include "brindley_log.h"
 
 /*
  * blog
