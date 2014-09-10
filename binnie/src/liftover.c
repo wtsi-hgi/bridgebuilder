@@ -21,7 +21,7 @@
  */
  /*
   * Simple tool to liftover co-ordinates. At the moment, takes in data of the form
-  * chr\tposition and a liftover file and outputs the resulting chromosone and position.
+  * chr\tposition and a liftover file and outputs the resulting chromosome and position.
  */
 #include "binnie_coordmap.h"
 #include "config.h"
