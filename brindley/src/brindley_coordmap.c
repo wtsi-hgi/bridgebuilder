@@ -1,5 +1,5 @@
 /*
- * binnie_coordmap.c Binnie co-ordinate mapping.
+ * brindley_coordmap.c Brindley co-ordinate mapping.
  *
  * Copyright (c) 2013 Genome Research Ltd. 
  * Author: Nicholas Clarke <nicholas.clarke@sanger.ac.uk>
@@ -25,13 +25,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "binnie.h"
-#include "binnie_log.h"
+#include "brindley.h"
+#include "brindley_log.h"
 #include "gl_xlist.h"
 #include "gl_avltreehash_list.h"
 #include "xalloc.h"
 #include "hash-pjw.h"
-#include "binnie_coordmap.h"
+#include "brindley_coordmap.h"
 
 #define LINE_LENGTH 256
 #define LINE_SEP = '\t'
@@ -103,9 +103,9 @@ size_t entry_hashcode(const void *elt)
   /* get uid */
   char* uid = bbr->key;
   // DLOG("entry_hashcode: calling hash_pjw on uid=[%s]", uid);
-  hashcode = hash_pjw(uid, BINNIE_TABLESIZE);
+  hashcode = hash_pjw(uid, BRINDLEY_TABLESIZE);
   
-  // DLOG("bbr_hashcode: have hashcode=[%zu] for uid=[%s] tablesize=[%zu]", hashcode, uid, BINNIE_TABLESIZE);
+  // DLOG("bbr_hashcode: have hashcode=[%zu] for uid=[%s] tablesize=[%zu]", hashcode, uid, BRINDLEY_TABLESIZE);
   
   // DLOG("bbr_hashcode: returning hashcode=[%zu]", hashcode);
   return hashcode;
@@ -116,7 +116,7 @@ size_t entry_hashcode(const void *elt)
  * entry_dispose
  * -------------------
  *
- * INPUT: pointer to binnie_binned_read_t read to be disposed of
+ * INPUT: pointer to entry to be disposed of
  *
  */
 void entry_dispose(const void *elt)

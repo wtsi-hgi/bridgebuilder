@@ -1,5 +1,5 @@
 /*
- * liftover.c Binnie co-ordinate liftover.
+ * brindley.c Brindley: standalone co-ordinate liftover.
  *
  * Copyright (c) 2013 Genome Research Ltd. 
  * Author: Nicholas Clarke <nicholas.clarke@sanger.ac.uk>
@@ -23,14 +23,21 @@
   * Simple tool to liftover co-ordinates. At the moment, takes in data of the form
   * chr\tposition and a liftover file and outputs the resulting chromosome and position.
  */
-#include "binnie_coordmap.h"
+
 #include "config.h"
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 #include <stdbool.h>
+
+/* gnulib headers */
+#include "progname.h"
 #include "xalloc.h"
-#include "binnie_log.h"
+
+/* brindley includes */
+#include "brindley_log.h"
+#include "brindley_coordmap.h"
 
 #define LINE_LENGTH 256
 
@@ -55,6 +62,10 @@ Range* createRange(char* input) {
 
 int main(int argc, char *argv[])
 {
+
+  /* setup progname */
+  set_program_name (argv[0]);
+
   FILE *in;
   FILE *out;
   char *mapFile;
@@ -70,7 +81,7 @@ int main(int argc, char *argv[])
     out = fopen(argv[3], "w");
     mapFile = argv[2];
   } else {
-    fprintf(stderr, "Usage: liftover in mapFile [out].\nWhere [out] is not given writes to stdout.\n");
+    fprintf(stderr, gettext("Usage: %s [options] <input> <liftover_map> [output]\n"), program_name);
   }
 
   CoordMap *map = bc_read_file(mapFile);

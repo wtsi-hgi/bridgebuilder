@@ -1,8 +1,8 @@
 /*
- * binnie_coordmap.h Binnie co-ordinate mapping.
+ * brindley.h - constants shared by all brindley code
  *
- * Copyright (c) 2013 Genome Research Ltd. 
- * Author: Nicholas Clarke <nicholas.clarke@sanger.ac.uk>
+ * Copyright (c) 2014 Genome Research Ltd. 
+ * Author: Joshua C. Randall <jcrandall@alum.mit.edu>
  *
  * This file is part of BridgeBuilder. 
  *
@@ -19,24 +19,24 @@
  * this program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
+#ifndef BRINDLEY_H
+#define BRINDLEY_H
 
- #define READ_UNMAPPED (-1)
 
- // Co-ordinate map
- typedef struct CoordMap CoordMap;
+/* gnulib headers */
+#include <stdbool.h>
+#include "size_max.h" /* to ensure SIZE_MAX is available */
 
- // Result
- typedef struct {
-  int start;
-  int end;
-  char* id;    
- } Range;
 
- // Read map from file
- CoordMap* bc_read_file(const char *filename);
+/* hash parameters */
+#define BRINDLEY_TABLESIZE 4294967296 // 2^32
 
- // Look up co-ordinates
- Range* bc_map_range(CoordMap* coordMap, Range* oldRef);
 
- // Free the coordinate map
- void bc_free_coordmap(CoordMap* coordMap);
+/* exit codes */
+#define BRINDLEY_EXIT_SUCCESS           	 0
+#define BRINDLEY_EXIT_ERR_ARGS          	 1
+#define BRINDLEY_EXIT_ERR_IN_FILES      	 2
+#define BRINDLEY_EXIT_ERR_OUT_FILES     	 3 
+#define BRINDLEY_EXIT_ERR_WRITE            15
+
+#endif
