@@ -98,7 +98,6 @@ int* build_translation_file(const char* trans_name, bam_hdr_t* file_header, bam_
     
     while (!feof(trans_file) && !ferror(trans_file) && counter > 0) {
         getline(&linepointer, &read, trans_file);
-        
         char* sep = linepointer;
         strsep(&sep, "\t");
         if (sep == NULL) break;
@@ -111,13 +110,16 @@ int* build_translation_file(const char* trans_name, bam_hdr_t* file_header, bam_
             char* item = file_header->target_name[i];
             if (!strcmp(item,linepointer)) { break; }
         }
-        int j = 0;
-        for ( ; j < replace_entries; j++ ) {
-            char* item = replace_header->target_name[j];
-            if (!strcmp(item,sep)) { break; }
+
+        if(i < file_entries) {
+            // A tid requires replacement
+            int j = 0;
+            for ( ; j < replace_entries; j++ ) {
+                char* item = replace_header->target_name[j];
+                if (!strcmp(item,sep)) { break; }
+            }
+            trans[i] = j;
         }
-        
-        trans[i] = j;
         counter--;
     }
     free(linepointer);
